@@ -1,0 +1,192 @@
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    container_name: cmms-postgres
+    environment:
+      POSTGRES_DB: cmms
+      POSTGRES_USER: cmms_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cmms_secure_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/prisma/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - cmms-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cmms_user -d cmms"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Broker MQTT - EMQX
+  emqx:
+    image: emqx/emqx:5.7-alpine
+    container_name: cmms-emqx
+    environment:
+      EMQX_NAME: emqx
+      EMQX_HOST: 127.0.0.1
+      EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD:-admin123}
+      EMQX_AUTH__JWT__SECRET: ${JWT_SECRET:-cmms_jwt_secret}
+    ports:
+      - "1883:1883"
+      - "8083:8083"
+      - "8084:8084"
+      - "8883:8883"
+      - "18083:18083"
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+    networks:
+      - cmms-network
+    healthcheck:
+      test: ["CMD", "emqx_ctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Almacenamiento de objetos - MinIO
+  minio:
+    image: minio/minio:latest
+    container_name: cmms-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cmmsadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-cmms_minio_pass}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - cmms-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Backend API - Node.js/Express
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cmms-backend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://cmms_user:${POSTGRES_PASSWORD:-cmms_secure_pass}@postgres:5432/cmms?schema=public
+      JWT_SECRET: ${JWT_SECRET:-cmms_jwt_secret}
+      JWT_EXPIRES_IN: 24h
+      MQTT_BROKER_URL: mqtt://emqx:1883
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-cmmsadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-cmms_minio_pass}
+      MINIO_BUCKET: cmms-assets
+      AI_SERVICE_URL: http://ai-service:8000
+      FRONTEND_URL: http://localhost:5173
+      EMAIL_HOST: ${EMAIL_HOST:-smtp.gmail.com}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_PASS: ${EMAIL_PASS:-}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - cmms-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      emqx:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Frontend - React + Vite
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cmms-frontend
+    environment:
+      VITE_API_URL: http://localhost:3000/api
+      VITE_WS_URL: ws://localhost:3000
+      VITE_MQTT_WS_URL: ws://localhost:8083/mqtt
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules:/app/node_modules
+    networks:
+      - cmms-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Servicio de IA - Python/FastAPI + YOLOv8
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: cmms-ai-service
+    environment:
+      PYTHONUNBUFFERED: 1
+      MODEL_PATH: /models
+      DEVICE: ${AI_DEVICE:-cpu}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ai-service:/app
+      - ai_models:/models
+    networks:
+      - cmms-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: cmms-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    networks:
+      - cmms-network
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  emqx_data:
+  emqx_log:
+  minio_data:
+  ai_models:
+  frontend_node_modules:
+
+networks:
+  cmms-network:
+    driver: bridge
