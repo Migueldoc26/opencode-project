@@ -18,9 +18,8 @@ jobs:
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
-          password: ${{ secrets.VPS_PASSWORD }}
+          key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd ${{ vars.PROJECT_PATH }}
+            cd /opt/controlmc/finanzas-familiares
             git pull origin develop
-            cd finanzas-familiares
-            docker-compose up -d --build
+            docker compose up -d --build
