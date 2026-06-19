@@ -1,0 +1,26 @@
+name: Deploy Finanzas Familiares
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - "finanzas-familiares/**"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          script: |
+            cd ${{ vars.PROJECT_PATH }}
+            git pull origin develop
+            cd finanzas-familiares
+            docker-compose up -d --build
