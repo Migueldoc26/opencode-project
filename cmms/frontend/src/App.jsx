@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './styles.css';
 
 const apiUrl = import.meta.env.VITE_API_URL || '/api';
