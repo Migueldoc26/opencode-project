@@ -15,6 +15,23 @@ const statusLabel = {
   pending: 'Pendiente',
 };
 
+async function fetchJson(path, options = {}) {
+  const response = await fetch(`${apiUrl}${path}`, {
+    cache: 'no-store',
+    ...options,
+    headers: {
+      'Cache-Control': 'no-cache',
+      ...(options.headers || {}),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Error ${response.status} en ${path}`);
+  }
+
+  return response.json();
+}
+
 export default function App() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -32,36 +49,37 @@ export default function App() {
   const [newChecklistName, setNewChecklistName] = useState('');
   const [newChecklistItems, setNewChecklistItems] = useState('');
   const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${apiUrl}/assets`)
-      .then((response) => response.json())
+    fetchJson('/assets')
       .then((data) => {
         setAssets(data);
         setAssetId(data[0]?.id || '');
-      });
+      })
+      .catch((error) => setMessage(`No se pudieron cargar equipos: ${error.message}`))
+      .finally(() => setLoading(false));
 
-    fetch(`${apiUrl}/inspections`)
-      .then((response) => response.json())
-      .then(setInspections);
+    fetchJson('/inspections')
+      .then(setInspections)
+      .catch((error) => setMessage(`No se pudo cargar historial: ${error.message}`));
   }, []);
 
   useEffect(() => {
     if (!assetId) return;
 
-    fetch(`${apiUrl}/assets/${assetId}/checklists`)
-      .then((response) => response.json())
+    fetchJson(`/assets/${assetId}/checklists`)
       .then((data) => {
         setChecklists(data);
         setChecklistId(data[0]?.id || '');
-      });
+      })
+      .catch((error) => setMessage(`No se pudieron cargar listas: ${error.message}`));
   }, [assetId]);
 
   useEffect(() => {
     if (!checklistId) return;
 
-    fetch(`${apiUrl}/checklists/${checklistId}`)
-      .then((response) => response.json())
+    fetchJson(`/checklists/${checklistId}`)
       .then((data) => {
         setChecklist(data);
         setResults(
@@ -72,7 +90,8 @@ export default function App() {
             ]),
           ),
         );
-      });
+      })
+      .catch((error) => setMessage(`No se pudo cargar checklist: ${error.message}`));
   }, [checklistId]);
 
   const selectedAsset = useMemo(
@@ -140,6 +159,7 @@ export default function App() {
     try {
       const response = await fetch(`${apiUrl}/ai/inspect`, {
         method: 'POST',
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ item, image: evidence }),
       });
@@ -168,6 +188,7 @@ export default function App() {
 
     const response = await fetch(`${apiUrl}/inspections`, {
       method: 'POST',
+      cache: 'no-store',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         assetId,
@@ -212,6 +233,7 @@ export default function App() {
 
     const response = await fetch(`${apiUrl}/checklists`, {
       method: 'POST',
+      cache: 'no-store',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ assetId, name: newChecklistName, items }),
     });
@@ -230,8 +252,7 @@ export default function App() {
   };
 
   const openReport = async (inspectionId) => {
-    const response = await fetch(`${apiUrl}/inspections/${inspectionId}/report`);
-    setReport(await response.json());
+    setReport(await fetchJson(`/inspections/${inspectionId}/report`));
   };
 
   return (
@@ -297,6 +318,7 @@ export default function App() {
           <button className="primary" onClick={submitInspection}>
             Guardar inspeccion
           </button>
+          {loading ? <p className="message">Cargando datos iniciales...</p> : null}
           {message ? <p className="message">{message}</p> : null}
 
           <details className="creator">

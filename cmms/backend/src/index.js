@@ -14,6 +14,12 @@ app.use(compression());
 app.use(cors({ origin: process.env.FRONTEND_URL || true, credentials: true }));
 app.use(express.json({ limit: '25mb' }));
 app.use(morgan('combined'));
+app.use('/api', (_req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
 
 const nowIso = () => new Date().toISOString();
 
