@@ -32,33 +32,33 @@ jobs:
 
       - name: Configure SSH
         env:
-          CONTROLMC_SSH_KEY: ${{ secrets.CONTROLMC_SSH_KEY }}
-          CONTROLMC_HOST: ${{ secrets.CONTROLMC_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
         run: |
-          test -n "$CONTROLMC_SSH_KEY"
-          test -n "$CONTROLMC_HOST"
+          test -n "$VPS_SSH_KEY"
+          test -n "$VPS_HOST"
           mkdir -p ~/.ssh
-          printf '%s\n' "$CONTROLMC_SSH_KEY" > ~/.ssh/controlmc_key
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/controlmc_key
           chmod 600 ~/.ssh/controlmc_key
-          ssh-keyscan -H "$CONTROLMC_HOST" >> ~/.ssh/known_hosts
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
 
       - name: Upload package
         env:
-          CONTROLMC_HOST: ${{ secrets.CONTROLMC_HOST }}
-          CONTROLMC_USER: ${{ secrets.CONTROLMC_USER }}
-          CONTROLMC_PORT: ${{ secrets.CONTROLMC_PORT || '22' }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
         run: |
-          scp -P "$CONTROLMC_PORT" -i ~/.ssh/controlmc_key \
+          scp -P "$VPS_PORT" -i ~/.ssh/controlmc_key \
             dist/finanzas-familiares.tgz \
-            "${CONTROLMC_USER:-root}@${CONTROLMC_HOST}:/tmp/finanzas-familiares.tgz"
+            "${VPS_USER:-root}@${VPS_HOST}:/tmp/finanzas-familiares.tgz"
 
       - name: Deploy on VPS
         env:
-          CONTROLMC_HOST: ${{ secrets.CONTROLMC_HOST }}
-          CONTROLMC_USER: ${{ secrets.CONTROLMC_USER }}
-          CONTROLMC_PORT: ${{ secrets.CONTROLMC_PORT || '22' }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
         run: |
-          ssh -p "$CONTROLMC_PORT" -i ~/.ssh/controlmc_key "${CONTROLMC_USER:-root}@${CONTROLMC_HOST}" <<'REMOTE'
+          ssh -p "$VPS_PORT" -i ~/.ssh/controlmc_key "${VPS_USER:-root}@${VPS_HOST}" <<'REMOTE'
             set -euo pipefail
             APP_DIR="/opt/controlmc/finanzas-familiares"
             mkdir -p "$APP_DIR/data"
