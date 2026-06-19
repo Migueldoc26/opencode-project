@@ -1,0 +1,21 @@
+:80 {
+  encode zstd gzip
+
+  handle /api/* {
+    reverse_proxy backend:3000
+  }
+
+  handle_path /ai/* {
+    reverse_proxy ai-service:8000
+  }
+
+  handle /socket.io/* {
+    reverse_proxy backend:3000
+  }
+
+  handle /mqtt* {
+    reverse_proxy emqx:8083
+  }
+
+  reverse_proxy frontend:80
+}

@@ -12,8 +12,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/prisma/init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
     networks:
       - cmms-network
     healthcheck:
@@ -28,14 +26,12 @@ services:
     container_name: cmms-emqx
     environment:
       EMQX_NAME: emqx
-      EMQX_HOST: 127.0.0.1
+      EMQX_HOST: emqx
       EMQX_DASHBOARD__DEFAULT_USERNAME: admin
       EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD:-admin123}
       EMQX_AUTH__JWT__SECRET: ${JWT_SECRET:-cmms_jwt_secret}
     ports:
       - "1883:1883"
-      - "8083:8083"
-      - "8084:8084"
       - "8883:8883"
       - "18083:18083"
     volumes:
@@ -57,18 +53,10 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cmmsadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-cmms_minio_pass}
-    ports:
-      - "9000:9000"
-      - "9001:9001"
     volumes:
       - minio_data:/data
     networks:
       - cmms-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
 
   # Backend API - Node.js/Express
   backend:
@@ -98,11 +86,6 @@ services:
       WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
       WHATSAPP_PHONE_ID: ${WHATSAPP_PHONE_ID:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
     networks:
       - cmms-network
     depends_on:
@@ -111,7 +94,7 @@ services:
       emqx:
         condition: service_healthy
       minio:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
 
   # Frontend - React + Vite
@@ -121,21 +104,16 @@ services:
       dockerfile: Dockerfile
     container_name: cmms-frontend
     environment:
-      VITE_API_URL: http://localhost:3000/api
-      VITE_WS_URL: ws://localhost:3000
-      VITE_MQTT_WS_URL: ws://localhost:8083/mqtt
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules:/app/node_modules
+      VITE_API_URL: /api
+      VITE_WS_URL: /
+      VITE_MQTT_WS_URL: /mqtt
     networks:
       - cmms-network
     depends_on:
       - backend
     restart: unless-stopped
 
-  # Servicio de IA - Python/FastAPI + YOLOv8
+  # Servicio de IA - Python/FastAPI
   ai-service:
     build:
       context: ./ai-service
@@ -145,38 +123,45 @@ services:
       PYTHONUNBUFFERED: 1
       MODEL_PATH: /models
       DEVICE: ${AI_DEVICE:-cpu}
-    ports:
-      - "8000:8000"
     volumes:
-      - ./ai-service:/app
       - ai_models:/models
     networks:
       - cmms-network
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     restart: unless-stopped
 
-  # Nginx Reverse Proxy
-  nginx:
-    image: nginx:alpine
-    container_name: cmms-nginx
+  # Caddy Reverse Proxy con HTTPS automatico para el subdominio
+  caddy:
+    image: caddy:2-alpine
+    container_name: cmms-caddy
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
-      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      CMMS_DOMAIN: ${CMMS_DOMAIN:-localhost}
+      CADDY_SITE_ADDRESS: ${CADDY_SITE_ADDRESS:-cmms.controlmc.click}
     networks:
       - cmms-network
     depends_on:
       - frontend
       - backend
+    restart: unless-stopped
+
+  # Alternativa cuando el servidor no expone 80/443:
+  # crear un tunnel en Cloudflare Zero Trust y pegar el token en .env.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cmms-cloudflared
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARED_TOKEN}
+    profiles:
+      - tunnel
+    networks:
+      - cmms-network
+    depends_on:
+      - caddy
     restart: unless-stopped
 
 volumes:
@@ -185,7 +170,8 @@ volumes:
   emqx_log:
   minio_data:
   ai_models:
-  frontend_node_modules:
+  caddy_data:
+  caddy_config:
 
 networks:
   cmms-network:
