@@ -24,7 +24,7 @@ const money = new Intl.NumberFormat("es-CL", {
 
 const titles = {
   dashboard: "Dashboard familiar",
-  admin: "Panel administrador",
+  admin: "Administrador",
   members: "Integrantes",
   transactions: "Movimientos",
   recurring: "Gastos fijos y suscripciones",
