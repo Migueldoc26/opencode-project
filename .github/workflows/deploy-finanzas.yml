@@ -2,24 +2,68 @@ name: Deploy Finanzas Familiares
 
 on:
   push:
-    branches: [develop]
+    branches:
+      - main
+      - develop
     paths:
       - "finanzas-familiares/**"
+      - ".github/workflows/deploy-finanzas.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-finanzas-familiares
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    name: Deploy Finanzas Familiares
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            cd /opt/controlmc/finanzas-familiares
-            git pull origin develop
+      - name: Build package
+        run: |
+          mkdir -p dist
+          tar --exclude='finanzas-familiares/data' \
+              -czf dist/finanzas-familiares.tgz \
+              -C finanzas-familiares .
+
+      - name: Configure SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          test -n "$VPS_SSH_KEY"
+          test -n "$VPS_HOST"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/controlmc_key
+          chmod 600 ~/.ssh/controlmc_key
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload package
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+        run: |
+          scp -P "$VPS_PORT" -i ~/.ssh/controlmc_key \
+            dist/finanzas-familiares.tgz \
+            "${VPS_USER:-root}@${VPS_HOST}:/tmp/finanzas-familiares.tgz"
+
+      - name: Deploy on VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+        run: |
+          ssh -p "$VPS_PORT" -i ~/.ssh/controlmc_key "${VPS_USER:-root}@${VPS_HOST}" <<'REMOTE'
+            set -euo pipefail
+            APP_DIR="/opt/controlmc/finanzas-familiares"
+            mkdir -p "$APP_DIR/data"
+            tar -xzf /tmp/finanzas-familiares.tgz -C "$APP_DIR"
+            cd "$APP_DIR"
             docker compose up -d --build
+            docker ps --filter name=finanzas-familiares
+          REMOTE
