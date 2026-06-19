@@ -18,6 +18,8 @@ jobs:
   deploy:
     name: Deploy Finanzas Familiares
     runs-on: ubuntu-latest
+    env:
+      HAS_VPS_SECRETS: ${{ secrets.VPS_HOST != '' && secrets.VPS_SSH_KEY != '' }}
 
     steps:
       - name: Checkout
@@ -31,6 +33,7 @@ jobs:
               -C finanzas-familiares .
 
       - name: Configure SSH
+        if: env.HAS_VPS_SECRETS == 'true'
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -43,6 +46,7 @@ jobs:
           ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
 
       - name: Upload package
+        if: env.HAS_VPS_SECRETS == 'true'
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
@@ -53,6 +57,7 @@ jobs:
             "${VPS_USER:-root}@${VPS_HOST}:/tmp/finanzas-familiares.tgz"
 
       - name: Deploy on VPS
+        if: env.HAS_VPS_SECRETS == 'true'
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
@@ -67,3 +72,8 @@ jobs:
             docker compose up -d --build
             docker ps --filter name=finanzas-familiares
           REMOTE
+
+      - name: Deployment secrets missing
+        if: env.HAS_VPS_SECRETS != 'true'
+        run: |
+          echo "::warning::Deploy omitido: configura VPS_HOST y VPS_SSH_KEY en Settings > Secrets and variables > Actions."
