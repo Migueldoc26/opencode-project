@@ -1,0 +1,69 @@
+name: Deploy Finanzas Familiares
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "finanzas-familiares/**"
+      - ".github/workflows/deploy-finanzas.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-finanzas-familiares
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Finanzas Familiares
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build package
+        run: |
+          mkdir -p dist
+          tar --exclude='finanzas-familiares/data' \
+              -czf dist/finanzas-familiares.tgz \
+              -C finanzas-familiares .
+
+      - name: Configure SSH
+        env:
+          CONTROLMC_SSH_KEY: ${{ secrets.CONTROLMC_SSH_KEY }}
+          CONTROLMC_HOST: ${{ secrets.CONTROLMC_HOST }}
+        run: |
+          test -n "$CONTROLMC_SSH_KEY"
+          test -n "$CONTROLMC_HOST"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$CONTROLMC_SSH_KEY" > ~/.ssh/controlmc_key
+          chmod 600 ~/.ssh/controlmc_key
+          ssh-keyscan -H "$CONTROLMC_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload package
+        env:
+          CONTROLMC_HOST: ${{ secrets.CONTROLMC_HOST }}
+          CONTROLMC_USER: ${{ secrets.CONTROLMC_USER }}
+          CONTROLMC_PORT: ${{ secrets.CONTROLMC_PORT || '22' }}
+        run: |
+          scp -P "$CONTROLMC_PORT" -i ~/.ssh/controlmc_key \
+            dist/finanzas-familiares.tgz \
+            "${CONTROLMC_USER:-root}@${CONTROLMC_HOST}:/tmp/finanzas-familiares.tgz"
+
+      - name: Deploy on VPS
+        env:
+          CONTROLMC_HOST: ${{ secrets.CONTROLMC_HOST }}
+          CONTROLMC_USER: ${{ secrets.CONTROLMC_USER }}
+          CONTROLMC_PORT: ${{ secrets.CONTROLMC_PORT || '22' }}
+        run: |
+          ssh -p "$CONTROLMC_PORT" -i ~/.ssh/controlmc_key "${CONTROLMC_USER:-root}@${CONTROLMC_HOST}" <<'REMOTE'
+            set -euo pipefail
+            APP_DIR="/opt/controlmc/finanzas-familiares"
+            mkdir -p "$APP_DIR/data"
+            tar -xzf /tmp/finanzas-familiares.tgz -C "$APP_DIR"
+            cd "$APP_DIR"
+            docker compose up -d --build
+            docker ps --filter name=finanzas-familiares
+          REMOTE
