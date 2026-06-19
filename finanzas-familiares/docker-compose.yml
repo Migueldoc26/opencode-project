@@ -1,0 +1,19 @@
+services:
+  finanzas-familiares:
+    build: .
+    container_name: finanzas-familiares
+    restart: unless-stopped
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8765"
+    volumes:
+      - ./data:/app/data
+    networks:
+      - controlmc_backend
+      - controlmc_proxy
+
+networks:
+  controlmc_backend:
+    external: true
+  controlmc_proxy:
+    external: true
