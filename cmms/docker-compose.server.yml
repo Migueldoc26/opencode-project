@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cmms-postgres
+    environment:
+      POSTGRES_DB: cmms
+      POSTGRES_USER: cmms_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/prisma/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - cmms-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cmms_user -d cmms"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  emqx:
+    image: emqx/emqx:5.7.2
+    container_name: cmms-emqx
+    environment:
+      EMQX_NAME: emqx
+      EMQX_HOST: emqx
+      EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD}
+      EMQX_AUTH__JWT__SECRET: ${JWT_SECRET}
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+    networks:
+      - cmms-network
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: cmms-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    networks:
+      - cmms-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cmms-backend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://cmms_user:${POSTGRES_PASSWORD}@postgres:5432/cmms?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: 24h
+      MQTT_BROKER_URL: mqtt://emqx:1883
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: cmms-assets
+      AI_SERVICE_URL: http://cmms-ai-service:8000
+      FRONTEND_URL: https://cmms.controlmc.click
+    networks:
+      - cmms-network
+      - controlmc_proxy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      emqx:
+        condition: service_started
+      minio:
+        condition: service_started
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cmms-frontend
+    environment:
+      VITE_API_URL: /api
+      VITE_WS_URL: /
+      VITE_MQTT_WS_URL: /mqtt
+    networks:
+      - cmms-network
+      - controlmc_proxy
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: cmms-ai-service
+    environment:
+      PYTHONUNBUFFERED: 1
+      MODEL_PATH: /models
+      DEVICE: ${AI_DEVICE:-cpu}
+    volumes:
+      - ai_models:/models
+    networks:
+      - cmms-network
+      - controlmc_proxy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  emqx_data:
+  emqx_log:
+  minio_data:
+  ai_models:
+
+networks:
+  cmms-network:
+    driver: bridge
+  controlmc_proxy:
+    external: true

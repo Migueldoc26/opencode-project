@@ -32,6 +32,12 @@ EMQX_DASHBOARD_PASSWORD=otra_clave_larga
 docker compose up -d --build
 ```
 
+En el VPS de ControlMC, donde Traefik ya publica `80/443`, usa el compose especifico del servidor:
+
+```bash
+docker compose -f docker-compose.server.yml up -d --build
+```
+
 Si ya estaba levantado con otro dominio o con `localhost`, recrea Caddy:
 
 ```bash
