@@ -125,6 +125,26 @@ app.get('/api/assets', (_req, res) => {
   res.json(assets);
 });
 
+app.post('/api/assets', (req, res) => {
+  const { code, name, area, criticality } = req.body;
+
+  if (!code || !name) {
+    res.status(400).json({ error: 'code and name are required' });
+    return;
+  }
+
+  const asset = {
+    id: code.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+    code,
+    name,
+    area: area || '',
+    criticality: criticality || 'Media',
+  };
+
+  assets.push(asset);
+  res.status(201).json(asset);
+});
+
 app.get('/api/assets/:assetId/checklists', (req, res) => {
   res.json(checklistTemplates.filter((checklist) => checklist.assetId === req.params.assetId));
 });
