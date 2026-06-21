@@ -1,107 +1,13 @@
-<!doctype html>
-<html lang="es">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>CMMS Vision - Inspeccion</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,-apple-system,sans-serif;background:#eef2f0;color:#18242d}
-header{display:flex;align-items:end;justify-content:space-between;padding:20px 24px;background:#fff;border-bottom:1px solid #d1dbdc}
-h1{font-size:28px}
-.workspace{display:grid;grid-template-columns:280px 1fr;gap:20px;padding:20px 24px}
-.sidebar{display:grid;gap:14px;padding:16px;background:#fff;border:1px solid #d1dbdc;border-radius:10px;position:sticky;top:16px;align-self:start}
-.sidebar label{display:grid;gap:6px;font-size:13px;font-weight:700}
-select,input,textarea{width:100%;min-height:40px;padding:0 12px;border:1px solid #b8c4c5;border-radius:8px;font:inherit}
-textarea{padding:12px;min-height:70px;resize:vertical}
-button{min-height:40px;padding:0 16px;border:1px solid #d1dbdc;border-radius:8px;background:#fff;cursor:pointer;font:inherit}
-.btn-primary{background:#176d6f;color:#fff;border-color:#176d6f}
-.msg{color:#875200;font-size:13px;font-weight:700}
-.inspection{display:grid;grid-template-columns:0.8fr 1.2fr;gap:20px}
-.camera{background:#111b22;border-radius:10px;overflow:hidden}
-video{width:100%;aspect-ratio:16/10;object-fit:cover;background:#111b22;display:block}
-.camera-actions{padding:10px;background:#fff}
-.camera-actions button{width:100%}
-.checklist{display:grid;gap:12px}
-.item{padding:14px;background:#fff;border:1px solid #d1dbdc;border-radius:10px;display:grid;gap:10px}
-.item-header{display:flex;justify-content:space-between;gap:12px}
-.item-header h2{font-size:16px;margin:0}
-.item-header p{margin:0;color:#53666d;font-size:14px}
-.severity{color:#14747a;font-size:11px;font-weight:800;text-transform:uppercase}
-.controls{display:flex;gap:8px;align-items:center}
-
-@media(max-width:900px){.workspace,.inspection{grid-template-columns:1fr}}
-</style>
-</head>
-<body>
-<header>
-<div>
-<p style="color:#14747a;font-size:12px;font-weight:800;text-transform:uppercase">CMMS Vision</p>
-<h1>Inspeccion hibrida</h1>
-</div>
-<div id="summary"></div>
-</header>
-<div class="workspace">
-<aside class="sidebar" id="sidebar"></aside>
-<section class="inspection">
-<div class="camera">
-<video id="video" autoplay playsinline muted></video>
-<canvas id="canvas" hidden></canvas>
-<div class="camera-actions"><button id="btnCam">Activar camara</button></div>
-</div>
-<div class="checklist" id="checklist"></div>
-</section>
-</div>
-
-<script>
-const api = "/api";
-let assets = [], inspections = [], checklists = [];
-let assetId = "", checklistId = "", checklist = null;
-let results = {}, responsible = "", cameraActive = false, busyItem = "";
-let video, canvas, ctx;
-
-async function get(url){const r=await fetch(url);if(!r.ok)throw Error(r.status);return r.json()}
-
-function render(){const a=document.getElementById("sidebar"),c=document.getElementById("checklist"),s=document.getElementById("summary");
-const co=Object.values(results).reduce((a,r)=>{a[r.status]=(a[r.status]||0)+1;return a},{pass:0,fail:0,review:0,pending:0});
-s.innerHTML=`<span style="background:#edf5f3;padding:2px 10px;border-radius:999px;font-size:13px;font-weight:800">${co.pass} cumple ${co.fail} no cumple ${co.review} revision</span>`;
-
-a.innerHTML=`<label>Equipo<select id="selAsset">${assets.map(a=>`<option value="${a.id}"${a.id===assetId?" selected":""}>${a.code} - ${a.name}</option>`).join("")}</select></label>
-<label>Lista de chequeo<select id="selCheck">${checklists.map(c=>`<option value="${c.id}"${c.id===checklistId?" selected":""}>${c.name}</option>`).join("")}</select></label>
-<label>Responsable<input id="inpResp" value="${responsible}" placeholder="Nombre inspector"/></label>
-${(()=>{const sa=assets.find(a=>a.id===assetId);return sa?`<dl style="display:grid;gap:8px;padding:12px;background:#f5f8f7;border-radius:8px;font-size:13px"><div style="display:flex;justify-content:space-between"><dt style="font-weight:700;color:#5d6d74">Area</dt><dd style="font-weight:800">${sa.area}</dd></div><div style="display:flex;justify-content:space-between"><dt style="font-weight:700;color:#5d6d74">Criticidad</dt><dd style="font-weight:800">${sa.criticality}</dd></div></dl>`:""})()}
-<button class="btn-primary" id="btnSave">Guardar inspeccion</button>
-<div id="msg" class="msg"></div>`;
-
-c.innerHTML=checklist?checklist.items.map(item=>{const r=results[item.id]||{};return`<div class="item"><div class="item-header"><div><p class="severity">${item.severity||""}</p><h2>${item.title}</h2><p>${item.visualCondition||""}</p></div><span style="display:inline-flex;align-items:center;padding:0 10px;border-radius:999px;font-size:13px;font-weight:800;background:#edf5f3">${{pass:"Cumple",fail:"No cumple",review:"Requiere revision",pending:"Pendiente"}[r.status||"pending"]}</span></div>
-<div class="controls">${["pass","fail","review"].map(o=>`<button class="${r.status===o?"btn-primary":""}" data-item="${item.id}" data-status="${o}" style="font-size:13px;font-weight:700">${{pass:"Cumple",fail:"No cumple",review:"Revision"}[o]}</button>`).join("")}
-<button data-ai="${item.id}" ${busyItem===item.id?"disabled":""}>${busyItem===item.id?"Analizando...":"Analizar IA"}</button></div>
-<textarea placeholder="Observaciones" data-comment="${item.id}">${r.comment||""}</textarea>
-${r.ai?`<div style="padding:10px;background:#edf5f3;border-radius:8px;font-size:13px"><strong>IA: ${{pass:"Cumple",fail:"No cumple",review:"Requiere revision"}[r.ai.status]}</strong> &middot; Confianza ${(r.ai.confidence*100).toFixed(0)}% &middot; ${(r.ai.detections||[]).map(d=>d.label).join(", ")||"sin etiquetas"}</div>`:""}
-${r.evidence?`<img src="${r.evidence}" style="width:100%;max-height:260px;object-fit:cover;border-radius:8px"/>`:""}</div>`}).join(""):"<p style=color:#53666d>Selecciona equipo y lista</p>";
-
-document.getElementById("selAsset")?.addEventListener("change",e=>{assetId=e.target.value;loadChecklists()});
-document.getElementById("selCheck")?.addEventListener("change",e=>{checklistId=e.target.value;loadChecklist()});
-document.getElementById("inpResp")?.addEventListener("input",e=>{responsible=e.target.value});
-document.getElementById("btnSave")?.addEventListener("click",submitInspection);
-document.getElementById("btnCam")?.addEventListener("click",toggleCamera);
-document.querySelectorAll("[data-status]").forEach(b=>b.addEventListener("click",()=>{updateResult(b.dataset.item,{status:b.dataset.status})}));
-document.querySelectorAll("[data-ai]").forEach(b=>b.addEventListener("click",()=>inspectWithAi(b.dataset.ai)));
-document.querySelectorAll("[data-comment]").forEach(t=>t.addEventListener("input",e=>{updateResult(t.dataset.comment,{comment:e.target.value})}));
-}
-
-async function loadChecklists(){if(!assetId)return;try{checklists=await get(api+"/assets/"+assetId+"/checklists");checklistId=checklists[0]?.id||"";await loadChecklist()}catch(e){document.getElementById("msg").textContent="Error: "+e.message}render()}
-async function loadChecklist(){if(!checklistId){checklist=null;render();return}try{checklist=await get(api+"/checklists/"+checklistId);results=Object.fromEntries(checklist.items.map(i=>[i.id,{itemId:i.id,status:"pending",comment:"",evidence:null,ai:null}]))}catch(e){document.getElementById("msg").textContent="Error: "+e.message}render()}
-function updateResult(id,p){results={...results,[id]:{...results[id],...p}};render()}
-
-async function toggleCamera(){if(cameraActive){video.srcObject?.getTracks().forEach(t=>t.stop());video.srcObject=null;cameraActive=false;document.getElementById("btnCam").textContent="Activar camara"}else{try{const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});video.srcObject=s;cameraActive=true;document.getElementById("btnCam").textContent="Detener camara"}catch(e){document.getElementById("msg").textContent="Error camara: "+e.message}}}
-
-async function inspectWithAi(itemId){if(!cameraActive){await toggleCamera();document.getElementById("msg").textContent="Camara activada. Vuelve a presionar Analizar IA";return}
-busyItem=itemId;render();const item=checklist.items.find(i=>i.id===itemId);canvas.width=video.videoWidth||960;canvas.height=video.videoHeight||540;ctx.drawImage(video,0,0);const evidence=canvas.toDataURL("image/jpeg",0.82);try{const r=await fetch(api+"/ai/inspect",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({item,image:evidence})});const ai=await r.json();if(!r.ok)throw Error(ai.error||"AI fallo");updateResult(itemId,{evidence,status:ai.status,ai,comment:ai.alert||results[itemId]?.comment||""})}catch(e){document.getElementById("msg").textContent="Error AI: "+e.message}finally{busyItem="";render()}}
-
-async function submitInspection(){if(!responsible.trim()){document.getElementById("msg").textContent="Ingresa el responsable";return}try{const r=await fetch(api+"/inspections",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({assetId,checklistId,responsible,results:Object.values(results)})});const ins=await r.json();if(!r.ok)throw Error(ins.error||"Error");inspections=[ins,...inspections];document.getElementById("msg").textContent="Inspeccion guardada: "+ins.id}catch(e){document.getElementById("msg").textContent="Error: "+e.message}}
-
-(async function init(){video=document.getElementById("video");canvas=document.getElementById("canvas");ctx=canvas.getContext("2d");try{assets=await get(api+"/assets");assetId=assets[0]?.id||"";inspections=await get(api+"/inspections")}catch(e){}if(assetId)await loadChecklists();render()})();
-</script>
-</body>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CMMS Vision - Industrial Maintenance</title>
+  </head>
+  <body class="bg-gray-50 text-gray-900 antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

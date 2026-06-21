@@ -1,0 +1,595 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AssetStatus {
+  OPERATIONAL
+  UNDER_MAINTENANCE
+  OUT_OF_SERVICE
+  DECOMMISSIONED
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum WorkOrderStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum WorkOrderPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SensorType {
+  TEMPERATURE
+  PRESSURE
+  VIBRATION
+  FLOW
+  LEVEL
+  CURRENT
+  VOLTAGE
+  SPEED
+  HUMIDITY
+  GAS
+  POSITION
+  OTHER
+}
+
+enum InspectionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AnomalyType {
+  VISUAL
+  ACOUSTIC
+  THERMAL
+  VIBRATION
+  LEAK
+  CORROSION
+  WEAR
+  OTHER
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  name      String
+  logo      String?
+  address   String?
+  phone     String?
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users    User[]
+  plants   Plant[]
+  kpiConfs KpiConfig[]
+}
+
+model User {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  password     String
+  role         String    @default("TECNICO")
+  avatar       String?
+  phone        String?
+  isActive     Boolean   @default(true)
+  lastLogin    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+
+  assignedWorkOrders WorkOrder[] @relation("AssignedUser")
+  createdWorkOrders  WorkOrder[] @relation("CreatedByUser")
+  conductedInspections Inspection[]
+  auditLogs          AuditLog[]
+  notifications      Notification[]
+}
+
+model Plant {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  location  String?
+  timezone  String   @default("America/Santiago")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+
+  areas Area[]
+}
+
+model Area {
+  id          String   @id @default(uuid())
+  name        String
+  code        String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  plant   Plant  @relation(fields: [plantId], references: [id])
+  plantId String
+
+  assets       Asset[]
+  inspections  Inspection[]
+  cameraRoutes CameraRoute[]
+}
+
+model Asset {
+  id           String      @id @default(uuid())
+  name         String
+  code         String      @unique
+  description  String?
+  category     String?
+  brand        String?
+  model        String?
+  serialNumber String?
+  location     String?
+  status       AssetStatus @default(OPERATIONAL)
+  installDate  DateTime?
+  warrantyEnd  DateTime?
+  usefulLife   Int?
+  imageUrl     String?
+  metadata     Json?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  company         Company?        @relation(fields: [companyId], references: [id])
+  companyId       String?
+  plant           Plant?          @relation(fields: [plantId], references: [id])
+  plantId         String?
+  area            Area?           @relation(fields: [areaId], references: [id])
+  areaId          String?
+
+  components      AssetComponent[]
+  sensors         Sensor[]
+  workOrders      WorkOrder[]
+  alerts          Alert[]
+  maintenanceLogs MaintenanceLog[]
+  documents       Document[]
+  spareParts      SparePart[]
+  digitalTwin     DigitalTwin?
+}
+
+model AssetComponent {
+  id       String  @id @default(uuid())
+  name     String
+  label    String?
+  position Json?
+  color    String?
+  status   String  @default("OPERATIONAL")
+  metadata Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  asset   Asset   @relation(fields: [assetId], references: [id])
+  assetId String
+
+  sensors Sensor[]
+}
+
+model Sensor {
+  id           String     @id @default(uuid())
+  name         String
+  code         String     @unique
+  type         SensorType
+  mqttTopic    String?
+  unit         String?
+  thresholds   Json?
+  isActive     Boolean    @default(true)
+  samplingRate Int?
+  metadata     Json?
+  position     Json?
+  lastValue    Float?
+  lastValueAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  asset         Asset?         @relation(fields: [assetId], references: [id])
+  assetId       String?
+  component     AssetComponent? @relation(fields: [componentId], references: [id])
+  componentId   String?
+
+  readings      SensorReading[]
+  alertConfigs  AlertConfig[]
+  alerts        Alert[]
+}
+
+model SensorReading {
+  id        String   @id @default(uuid())
+  value     Float
+  timestamp DateTime @default(now())
+
+  sensor   Sensor @relation(fields: [sensorId], references: [id])
+  sensorId String
+
+  @@index([sensorId, timestamp])
+}
+
+model AlertConfig {
+  id           String         @id @default(uuid())
+  name         String
+  severity     AlertSeverity  @default(MEDIUM)
+  enabled      Boolean        @default(true)
+  condition    String?
+  threshold    Float?
+  cooldownMin  Int            @default(60)
+  notifyEmail  Boolean        @default(false)
+  notifyApp    Boolean        @default(true)
+  notifyWhatsApp Boolean      @default(false)
+  notifyTelegram Boolean      @default(false)
+
+  sensor   Sensor @relation(fields: [sensorId], references: [id])
+  sensorId String
+
+  alerts Alert[]
+}
+
+model Alert {
+  id             String        @id @default(uuid())
+  message        String
+  severity       AlertSeverity @default(MEDIUM)
+  status         AlertStatus   @default(ACTIVE)
+  value          Float?
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+  createdAt      DateTime      @default(now())
+
+  alertConfig  AlertConfig? @relation(fields: [alertConfigId], references: [id])
+  alertConfigId String?
+  sensor       Sensor?      @relation(fields: [sensorId], references: [id])
+  sensorId     String?
+  asset        Asset?       @relation(fields: [assetId], references: [id])
+  assetId      String?
+  acknowledgedBy User?      @relation("AcknowledgedBy")
+  acknowledgedById String?
+  resolvedBy     User?      @relation("ResolvedBy")
+  resolvedById   String?
+
+  notifications Notification[]
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  channel   String
+  message   String
+  sentAt    DateTime @default(now())
+  readAt    DateTime?
+  delivered Boolean  @default(false)
+
+  alert   Alert? @relation(fields: [alertId], references: [id])
+  alertId String?
+  user    User?  @relation(fields: [userId], references: [id])
+  userId  String?
+}
+
+model WorkOrder {
+  id              String            @id @default(uuid())
+  code            String            @unique
+  title           String
+  description     String?
+  status          WorkOrderStatus   @default(PENDING)
+  priority        WorkOrderPriority @default(MEDIUM)
+  scheduledDate   DateTime?
+  startDate       DateTime?
+  completionDate  DateTime?
+  estimatedHours  Float?
+  actualHours     Float?
+  costEstimate    Float?
+  costActual      Float?
+  failureCode     String?
+  closureNotes    String?
+  metadata        Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  asset        Asset? @relation(fields: [assetId], references: [id])
+  assetId      String?
+  assignedTo   User?  @relation("AssignedUser", fields: [assignedToId], references: [id])
+  assignedToId String?
+  createdBy    User   @relation("CreatedByUser", fields: [createdById], references: [id])
+  createdById  String
+  inspection   Inspection? @relation(fields: [inspectionId], references: [id])
+  inspectionId String?
+
+  activities  WorkOrderActivity[]
+  spareParts  WorkOrderSparePart[]
+}
+
+model WorkOrderActivity {
+  id          String  @id @default(uuid())
+  description String?
+  durationMin Int?
+  completed   Boolean @default(false)
+  orderIndex  Int?
+
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
+  workOrderId String
+}
+
+model WorkOrderSparePart {
+  id        String @id @default(uuid())
+  quantity  Int
+
+  workOrder  WorkOrder @relation(fields: [workOrderId], references: [id])
+  workOrderId String
+  sparePart   SparePart @relation(fields: [sparePartId], references: [id])
+  sparePartId String
+}
+
+model SparePart {
+  id          String  @id @default(uuid())
+  name        String
+  code        String  @unique
+  description String?
+  stock       Int     @default(0)
+  minStock    Int     @default(0)
+  unitPrice   Float?
+  location    String?
+  supplier    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  asset       Asset? @relation(fields: [assetId], references: [id])
+  assetId     String?
+  workOrders  WorkOrderSparePart[]
+  consumption PartConsumptionLog[]
+}
+
+model PartConsumptionLog {
+  id        String   @id @default(uuid())
+  quantity  Int
+  reason    String?
+  createdAt DateTime @default(now())
+
+  sparePart   SparePart @relation(fields: [sparePartId], references: [id])
+  sparePartId String
+}
+
+model MaintenanceLog {
+  id          String   @id @default(uuid())
+  type        String
+  description String?
+  cost        Float?
+  durationMin Int?
+  performedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  asset   Asset @relation(fields: [assetId], references: [id])
+  assetId String
+}
+
+model Checklist {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  category    String?
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items     ChecklistItem[]
+  inspections Inspection[]
+}
+
+model ChecklistItem {
+  id         String  @id @default(uuid())
+  label      String
+  type       String  @default("boolean")
+  required   Boolean @default(true)
+  orderIndex Int?
+  options    Json?
+
+  checklist   Checklist @relation(fields: [checklistId], references: [id])
+  checklistId String
+
+  inspectionResults InspectionChecklistItem[]
+}
+
+model Inspection {
+  id              String           @id @default(uuid())
+  title           String
+  status          InspectionStatus @default(SCHEDULED)
+  observationMode String           @default("VISUAL")
+  scheduledDate   DateTime?
+  completedAt     DateTime?
+  notes           String?
+  metadata        Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  area        Area?       @relation(fields: [areaId], references: [id])
+  areaId      String?
+  conductedBy User?       @relation(fields: [conductedById], references: [id])
+  conductedById String?
+  checklist   Checklist?  @relation(fields: [checklistId], references: [id])
+  checklistId String?
+
+  workOrders    WorkOrder[]
+  itemResults   InspectionChecklistItem[]
+  media         InspectionMedia[]
+  anomalies     InspectionAnomaly[]
+}
+
+model InspectionChecklistItem {
+  id          String  @id @default(uuid())
+  value       String?
+  observation String?
+  imageUrl    String?
+
+  inspection   Inspection @relation(fields: [inspectionId], references: [id])
+  inspectionId String
+  checklistItem ChecklistItem @relation(fields: [checklistItemId], references: [id])
+  checklistItemId String
+}
+
+model InspectionMedia {
+  id          String   @id @default(uuid())
+  type        String
+  url         String
+  thumbnail   String?
+  description String?
+  uploadedAt  DateTime @default(now())
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id])
+  inspectionId String
+}
+
+model InspectionAnomaly {
+  id          String      @id @default(uuid())
+  type        AnomalyType
+  description String?
+  severity    String      @default("MEDIUM")
+  imageUrl    String?
+  aiDetected  Boolean     @default(false)
+  confidence  Float?
+  location    Json?
+  status      String      @default("OPEN")
+  resolvedAt  DateTime?
+  createdAt   DateTime    @default(now())
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id])
+  inspectionId String
+}
+
+model CameraRoute {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  waypoints   Json?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  area     Area? @relation(fields: [areaId], references: [id])
+  areaId   String?
+  inspection Inspection? @relation(fields: [inspectionId], references: [id])
+  inspectionId String?
+
+  records CameraRecord[]
+}
+
+model CameraRecord {
+  id               String   @id @default(uuid())
+  timestamp        DateTime @default(now())
+  imageUrl         String?
+  annotatedUrl     String?
+  detectionResults Json?
+  processed        Boolean  @default(false)
+
+  route    CameraRoute @relation(fields: [routeId], references: [id])
+  routeId  String
+}
+
+model DigitalTwin {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  modelUrl    String?
+  stlFileUrl  String?
+  thumbnail   String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  asset   Asset?  @relation(fields: [assetId], references: [id])
+  assetId String? @unique
+
+  scenes Scene[]
+}
+
+model Scene {
+  id             String @id @default(uuid())
+  name           String
+  cameraPosition Json?
+  lights         Json?
+
+  digitalTwin   DigitalTwin @relation(fields: [digitalTwinId], references: [id])
+  digitalTwinId String
+}
+
+model Document {
+  id        String   @id @default(uuid())
+  name      String
+  type      String
+  url       String
+  size      Int?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  asset     Asset? @relation(fields: [assetId], references: [id])
+  assetId   String?
+  workOrder WorkOrder? @relation(fields: [workOrderId], references: [id])
+  workOrderId String?
+}
+
+model KpiConfig {
+  id        String  @id @default(uuid())
+  name      String
+  type      String
+  enabled   Boolean @default(true)
+  params    Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company  @relation(fields: [companyId], references: [id])
+  companyId String
+}
+
+model KpiSnapshot {
+  id          String   @id @default(uuid())
+  type        String
+  value       Float
+  periodStart DateTime?
+  periodEnd   DateTime?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String
+  entity      String
+  entityId    String?
+  description String?
+  metadata    Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+}

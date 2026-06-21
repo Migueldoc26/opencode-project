@@ -1,79 +1,102 @@
-# Despliegue CMMS con Docker y subdominio
+# CMMS Deployment
 
-## 1. Configurar DNS
+## Prerequisites
 
-Crea un registro `A` para el subdominio apuntando a la IP publica del servidor:
+- Docker and Docker Compose v2 installed on the server
+- Git to clone the repository
+- A domain pointing to the server's public IP (e.g., `cmms.controlmc.click`)
+- Traefik reverse proxy running externally on the host (port 80/443)
 
-```txt
-cmms.controlmc.click -> 187.77.46.162
-```
-
-El registro `A` ya debe existir y apuntar a `187.77.46.162`. Si usas Cloudflare, deja el proxy naranja desactivado al inicio para que Caddy pueda emitir el certificado TLS.
-
-## 2. Configurar variables
+## Environment Setup
 
 ```bash
 cp .env.example .env
 ```
 
-Edita `.env` y cambia al menos:
+Edit `.env` and replace all secrets:
 
 ```env
-CMMS_DOMAIN=cmms.controlmc.click
-POSTGRES_PASSWORD=una_clave_larga
-JWT_SECRET=otro_secreto_largo
-MINIO_ROOT_PASSWORD=otra_clave_larga
-EMQX_DASHBOARD_PASSWORD=otra_clave_larga
+POSTGRES_PASSWORD=<strong-random-password>
+JWT_SECRET=<strong-random-secret>
+EMQX_DASHBOARD_PASSWORD=<strong-password>
+MINIO_ROOT_USER=cmmsadmin
+MINIO_ROOT_PASSWORD=<strong-password>
+CMMS_DOMAIN=cmms.yourdomain.com
 ```
 
-## 3. Levantar servicios
+## Docker Compose
+
+### Development (direct port access)
 
 ```bash
 docker compose up -d --build
 ```
 
-En el VPS de ControlMC, donde Traefik ya publica `80/443`, usa el compose especifico del servidor:
+Services are exposed on:
+- `http://localhost:3000` — Backend API
+- `http://localhost:8000` — AI Service
+- `mqtt://localhost:1883` — MQTT Broker
+- `http://localhost:18083` — EMQX Dashboard
+
+The frontend is not directly exposed (served via nginx inside its container). Add its port in `docker-compose.yml` or use the backend as proxy.
+
+### Production (with Traefik)
 
 ```bash
 docker compose -f docker-compose.server.yml up -d --build
 ```
 
-Si ya estaba levantado con otro dominio o con `localhost`, recrea Caddy:
+## Traefik Configuration
 
-```bash
-docker compose up -d --build --force-recreate caddy
-docker logs --tail=100 cmms-caddy
+Add a router and service in Traefik's dynamic config (e.g., `traefik/config.yml`):
+
+```yaml
+http:
+  routers:
+    cmms:
+      rule: "Host(`cmms.yourdomain.com`)"
+      service: cmms-frontend
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+    cmms-api:
+      rule: "Host(`cmms.yourdomain.com`) && PathPrefix(`/api/`)"
+      service: cmms-backend
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    cmms-frontend:
+      loadBalancer:
+        servers:
+          - url: "http://cmms-frontend:80"
+
+    cmms-backend:
+      loadBalancer:
+        servers:
+          - url: "http://cmms-backend:3000"
 ```
 
-## 4. Verificar
+Ensure both Traefik and the CMMS stack share a Docker network (e.g., `controlmc_proxy`):
+
+```bash
+docker network create controlmc_proxy
+```
+
+Attach Traefik to `controlmc_proxy` and deploy CMMS with `docker-compose.server.yml`, which already includes the external network.
+
+## SSL Certificates
+
+Traefik automatically provisions and renews Let's Encrypt certificates via its `certResolver`. No manual certificate management is needed.
+
+## Verify
 
 ```bash
 docker compose ps
-curl http://cmms.controlmc.click/api/health
-curl https://cmms.controlmc.click/api/health
-curl https://cmms.controlmc.click/ai/health
+curl https://cmms.yourdomain.com/api/health
+curl https://cmms.yourdomain.com/ai/health
 ```
-
-## 5. Solucionar `NET::ERR_CERT_AUTHORITY_INVALID`
-
-Ese error aparece cuando el navegador recibe un certificado autofirmado, de otro dominio o emitido por una autoridad no confiable. Revisa:
-
-```bash
-docker logs --tail=200 cmms-caddy
-sudo ss -lntp | grep -E ':80|:443'
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw status
-```
-
-Tambien confirma que ningun Nginx/Apache/Caddy del host este ocupando esos puertos:
-
-```bash
-sudo systemctl status nginx apache2 caddy
-```
-
-Si alguno esta usando `80` o `443`, detenlo o mueve este compose a otro proxy principal. Caddy necesita recibir trafico publico por `80` y `443` para emitir el certificado valido de Let's Encrypt.
-
-## Notas
-
-La funcionalidad actual incluye listas de chequeo por activo, ingreso manual, captura de evidencia con camara, analisis automatico por servicio IA, validacion manual, historial y reporte JSON. El motor IA expone el contrato para conectar YOLO/OpenCV; por ahora usa un evaluador placeholder para validar el flujo completo.

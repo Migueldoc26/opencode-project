@@ -1,7 +1,4 @@
-version: '3.8'
-
 services:
-  # Base de datos PostgreSQL
   postgres:
     image: postgres:16-alpine
     container_name: cmms-postgres
@@ -20,9 +17,8 @@ services:
       timeout: 5s
       retries: 5
 
-  # Broker MQTT - EMQX
   emqx:
-    image: emqx/emqx:5.7-alpine
+    image: emqx/emqx:5.7.2
     container_name: cmms-emqx
     environment:
       EMQX_NAME: emqx
@@ -45,7 +41,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Almacenamiento de objetos - MinIO
   minio:
     image: minio/minio:latest
     container_name: cmms-minio
@@ -58,12 +53,13 @@ services:
     networks:
       - cmms-network
 
-  # Backend API - Node.js/Express
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: cmms-backend
+    ports:
+      - "3000:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -97,7 +93,6 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # Frontend - React + Vite
   frontend:
     build:
       context: ./frontend
@@ -105,20 +100,19 @@ services:
     container_name: cmms-frontend
     environment:
       VITE_API_URL: /api
-      VITE_WS_URL: /
-      VITE_MQTT_WS_URL: /mqtt
     networks:
       - cmms-network
     depends_on:
       - backend
     restart: unless-stopped
 
-  # Servicio de IA - Python/FastAPI
   ai-service:
     build:
       context: ./ai-service
       dockerfile: Dockerfile
     container_name: cmms-ai-service
+    ports:
+      - "8000:8000"
     environment:
       PYTHONUNBUFFERED: 1
       MODEL_PATH: /models
@@ -129,49 +123,12 @@ services:
       - cmms-network
     restart: unless-stopped
 
-  # Caddy Reverse Proxy con HTTPS automatico para el subdominio
-  caddy:
-    image: caddy:2-alpine
-    container_name: cmms-caddy
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    environment:
-      CMMS_DOMAIN: ${CMMS_DOMAIN:-localhost}
-      CADDY_SITE_ADDRESS: ${CADDY_SITE_ADDRESS:-cmms.controlmc.click}
-    networks:
-      - cmms-network
-    depends_on:
-      - frontend
-      - backend
-    restart: unless-stopped
-
-  # Alternativa cuando el servidor no expone 80/443:
-  # crear un tunnel en Cloudflare Zero Trust y pegar el token en .env.
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: cmms-cloudflared
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARED_TOKEN}
-    profiles:
-      - tunnel
-    networks:
-      - cmms-network
-    depends_on:
-      - caddy
-    restart: unless-stopped
-
 volumes:
   postgres_data:
   emqx_data:
   emqx_log:
   minio_data:
   ai_models:
-  caddy_data:
-  caddy_config:
 
 networks:
   cmms-network:
