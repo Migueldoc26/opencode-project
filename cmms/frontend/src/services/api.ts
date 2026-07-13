@@ -109,6 +109,11 @@ export const digitalTwinService = {
 
 export const userService = {
   list: () => api.get('/users').then(r => r.data),
+  getById: (id: string) => api.get(`/users/${id}`).then(r => r.data),
+  create: (data: { name: string; email: string; password: string; role: string; phone?: string }) => api.post('/users', data).then(r => r.data),
+  update: (id: string, data: { name?: string; email?: string; role?: string; phone?: string; isActive?: boolean }) => api.put(`/users/${id}`, data).then(r => r.data),
+  updatePassword: (id: string, password: string) => api.put(`/users/${id}/password`, { password }).then(r => r.data),
+  remove: (id: string) => api.delete(`/users/${id}`).then(r => r.data),
 }
 
 export const settingsService = {
