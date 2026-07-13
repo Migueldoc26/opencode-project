@@ -14,6 +14,7 @@ import Alerts from './pages/Alerts'
 import Inspections from './pages/Inspections'
 import Analytics from './pages/Analytics'
 import Settings from './pages/Settings'
+import Users from './pages/Users'
 import { type ReactNode } from 'react'
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -51,6 +52,7 @@ function AppRoutes() {
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/inspections" element={<Inspections />} />
         <Route path="/analytics" element={<Analytics />} />
+        <Route path="/users" element={<Users />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

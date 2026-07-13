@@ -3,22 +3,23 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, CircuitBoard, Server, Activity, ClipboardList,
   Bell, SearchCheck, BarChart3, Settings, LogOut, Menu, X,
-  ChevronLeft, ChevronRight, Wifi, WifiOff, User,
+  ChevronLeft, ChevronRight, Wifi, WifiOff, User, Users,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useWebSocket } from '../context/WebSocketContext'
 import Logo from './common/Logo'
 
 const navigation = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/digital-twin', icon: CircuitBoard, label: 'Digital Twin' },
-  { to: '/assets', icon: Server, label: 'Assets' },
-  { to: '/sensors', icon: Activity, label: 'Sensors' },
-  { to: '/work-orders', icon: ClipboardList, label: 'Work Orders' },
-  { to: '/alerts', icon: Bell, label: 'Alerts' },
-  { to: '/inspections', icon: SearchCheck, label: 'Inspections' },
-  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
+  { to: '/', icon: LayoutDashboard, label: 'Panel' },
+  { to: '/digital-twin', icon: CircuitBoard, label: 'Gemelo digital' },
+  { to: '/assets', icon: Server, label: 'Activos' },
+  { to: '/sensors', icon: Activity, label: 'Sensores' },
+  { to: '/work-orders', icon: ClipboardList, label: 'Ordenes de trabajo' },
+  { to: '/alerts', icon: Bell, label: 'Alertas' },
+  { to: '/inspections', icon: SearchCheck, label: 'Inspecciones' },
+  { to: '/analytics', icon: BarChart3, label: 'Analitica' },
+  { to: '/users', icon: Users, label: 'Usuarios' },
+  { to: '/settings', icon: Settings, label: 'Configuracion' },
 ]
 
 export default function Layout() {
@@ -34,36 +35,36 @@ export default function Layout() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex h-screen overflow-hidden bg-white">
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-gray-950/35 lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-gray-900 text-white transition-all duration-300 lg:static ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-gray-200 bg-white text-gray-950 shadow-xl shadow-gray-950/5 transition-all duration-300 lg:static lg:shadow-none ${
           collapsed ? 'w-16' : 'w-64'
         } ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
         {/* Logo area */}
-        <div className={`flex items-center border-b border-gray-800 px-4 ${collapsed ? 'justify-center py-4' : 'justify-between py-3'}`}>
+        <div className={`flex items-center border-b border-gray-200 bg-white px-4 ${collapsed ? 'justify-center py-4' : 'justify-between py-3'}`}>
           {!collapsed && (
             <div className="flex items-center gap-3">
               <Logo size={32} />
               <div className="leading-tight">
-                <p className="text-sm font-bold text-white">CMMS</p>
-                <p className="text-[10px] text-gray-400">Vision</p>
+                <p className="text-sm font-bold text-gray-950">CMMS</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-primary-600">Industrial</p>
               </div>
             </div>
           )}
           {collapsed && <Logo size={28} />}
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="hidden rounded-lg p-1 text-gray-400 hover:bg-gray-800 hover:text-white lg:block"
+            className="hidden rounded-lg p-1 text-gray-500 hover:bg-primary-50 hover:text-primary-700 lg:block"
           >
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </button>
@@ -88,7 +89,7 @@ export default function Layout() {
         </nav>
 
         {/* User info */}
-        <div className={`border-t border-gray-800 p-4 ${collapsed ? 'text-center' : ''}`}>
+        <div className={`border-t border-gray-200 bg-gray-50/70 p-4 ${collapsed ? 'text-center' : ''}`}>
           {collapsed ? (
             <div className="flex justify-center">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-600 text-xs font-bold text-white">
@@ -101,23 +102,23 @@ export default function Layout() {
                 {user?.name?.charAt(0)?.toUpperCase() || 'U'}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="truncate text-sm font-medium text-white">{user?.name || 'User'}</p>
-                <p className="truncate text-xs text-gray-400">{user?.email || ''}</p>
+                <p className="truncate text-sm font-semibold text-gray-950">{user?.name || 'Usuario'}</p>
+                <p className="truncate text-xs text-gray-500">{user?.email || ''}</p>
               </div>
             </div>
           )}
         </div>
 
         {/* Logout */}
-        <div className={`border-t border-gray-800 p-4 ${collapsed ? 'text-center' : ''}`}>
+        <div className={`border-t border-gray-200 bg-white p-4 ${collapsed ? 'text-center' : ''}`}>
           <button
             onClick={handleLogout}
-            className={`flex items-center gap-2 rounded-lg text-sm font-medium text-gray-400 transition-colors hover:text-white ${
-              collapsed ? 'justify-center w-full' : 'w-full px-3 py-2 hover:bg-gray-800'
+            className={`flex items-center gap-2 rounded-lg text-sm font-semibold text-gray-600 transition-colors hover:text-primary-700 ${
+              collapsed ? 'justify-center w-full' : 'w-full px-3 py-2 hover:bg-primary-50'
             }`}
           >
             <LogOut className="h-5 w-5" />
-            {!collapsed && <span>Logout</span>}
+            {!collapsed && <span>Cerrar sesion</span>}
           </button>
         </div>
       </aside>
@@ -125,7 +126,7 @@ export default function Layout() {
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex h-16 items-center justify-between border-b bg-white px-4 lg:px-6">
+        <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 lg:px-6">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileOpen(true)}
@@ -133,7 +134,10 @@ export default function Layout() {
             >
               <Menu className="h-5 w-5" />
             </button>
-            <h1 className="text-lg font-semibold text-gray-900">CMMS Vision</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold text-gray-900">CMMS Industrial</h1>
+              <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700">Industrial v2</span>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -142,20 +146,20 @@ export default function Layout() {
               ) : (
                 <WifiOff className="h-4 w-4 text-danger-500" />
               )}
-              <span className="hidden sm:inline">{connected ? 'Connected' : 'Disconnected'}</span>
+              <span className="hidden sm:inline">{connected ? 'Conectado' : 'Desconectado'}</span>
             </div>
             <button
               onClick={() => navigate('/settings')}
               className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
             >
               <User className="h-4 w-4" />
-              <span className="hidden sm:inline">{user?.name || 'User'}</span>
+              <span className="hidden sm:inline">{user?.name || 'Usuario'}</span>
             </button>
           </div>
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <main className="flex-1 overflow-y-auto bg-gray-50/60 p-4 lg:p-6">
           <Outlet />
         </main>
       </div>
