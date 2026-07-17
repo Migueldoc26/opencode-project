@@ -1,4 +1,5 @@
 import prisma from './prisma.js';
+import { AppError } from '../middleware/errorHandler.js';
 
 export async function calculateMTBF(assetId) {
   const logs = await prisma.maintenanceLog.findMany({
@@ -91,7 +92,10 @@ export async function getKpiTrends(assetId, period = '7d') {
   };
 }
 
-export async function getAssetKpis(assetId) {
+export async function getAssetKpis(assetId, companyId) {
+  const asset = await prisma.asset.findFirst({ where: { id: assetId, companyId } });
+  if (!asset) throw new AppError('Activo no encontrado', 404);
+
   const [mtbf, mttr, availability, oee] = await Promise.all([
     calculateMTBF(assetId),
     calculateMTTR(assetId),
@@ -102,7 +106,7 @@ export async function getAssetKpis(assetId) {
   return { mtbf, mttr, availability, oee };
 }
 
-export async function getDashboardKpis() {
+export async function getDashboardKpis(companyId) {
   const [
     totalAssets,
     activeAlerts,
@@ -111,17 +115,18 @@ export async function getDashboardKpis() {
     completedToday,
     totalUsers,
   ] = await Promise.all([
-    prisma.asset.count({ where: { status: 'OPERATIONAL' } }),
-    prisma.alert.count({ where: { status: 'ACTIVE' } }),
-    prisma.workOrder.count({ where: { status: 'PENDING' } }),
-    prisma.workOrder.count({ where: { status: 'IN_PROGRESS' } }),
+    prisma.asset.count({ where: { companyId, status: 'OPERATIONAL' } }),
+    prisma.alert.count({ where: { status: 'ACTIVE', asset: { companyId } } }),
+    prisma.workOrder.count({ where: { status: 'PENDING', asset: { companyId } } }),
+    prisma.workOrder.count({ where: { status: 'IN_PROGRESS', asset: { companyId } } }),
     prisma.workOrder.count({
       where: {
         status: 'COMPLETED',
+        asset: { companyId },
         completionDate: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
       },
     }),
-    prisma.user.count({ where: { isActive: true } }),
+    prisma.user.count({ where: { companyId, isActive: true } }),
   ]);
 
   return {

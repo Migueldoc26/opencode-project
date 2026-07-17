@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { alertService } from '../services/api'
 import { useWebSocket } from '../context/WebSocketContext'
+import ErrorBoundary from '../components/ErrorBoundary'
 
 interface Alert {
   id: string
@@ -35,6 +36,20 @@ export default function Alerts() {
   const [severityFilter, setSeverityFilter] = useState('')
   const { subscribe, unsubscribe } = useWebSocket()
 
+  const mapAlert = (a: Record<string, unknown>): Alert => ({
+    id: a.id as string,
+    title: (a.title as string) || (a.message as string)?.split('.')[0] || '',
+    message: a.message as string,
+    severity: a.severity as string,
+    status: a.status as string,
+    assetName: (a.assetName as string) || (a.asset as Record<string, unknown>)?.name as string || '',
+    acknowledgedBy: (a.acknowledgedBy as Record<string, unknown>)?.name as string || '',
+    resolvedBy: (a.resolvedBy as Record<string, unknown>)?.name as string || '',
+    createdAt: a.createdAt as string,
+    acknowledgedAt: a.acknowledgedAt as string,
+    resolvedAt: a.resolvedAt as string,
+  })
+
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
@@ -42,8 +57,9 @@ export default function Alerts() {
         alertService.getActive(),
         alertService.getHistory({ limit: 50 }),
       ])
-      setActiveAlerts(active || [])
-      setHistory(hist?.items || hist?.data || hist || [])
+      setActiveAlerts((Array.isArray(active) ? active : []).map(mapAlert))
+      const items = hist?.items || hist?.data || hist || []
+      setHistory((Array.isArray(items) ? items : []).map(mapAlert))
     } catch { /* ignore */ }
     setLoading(false)
   }, [])
@@ -80,13 +96,17 @@ export default function Alerts() {
     } catch { /* ignore */ }
   }
 
-  const filteredHistory = history.filter(a => {
+  const safeActive = Array.isArray(activeAlerts) ? activeAlerts : []
+  const safeHistory = Array.isArray(history) ? history : []
+
+  const filteredHistory = safeHistory.filter(a => {
     if (search && !a.title?.toLowerCase().includes(search.toLowerCase()) && !a.message?.toLowerCase().includes(search.toLowerCase())) return false
     if (severityFilter && a.severity !== severityFilter) return false
     return true
   })
 
   return (
+    <ErrorBoundary>
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Alerts</h2>
@@ -100,9 +120,9 @@ export default function Alerts() {
           className={tab === 'active' ? 'tab-active' : 'tab'}
         >
           Active
-          {activeAlerts.length > 0 && (
+          {safeActive.length > 0 && (
             <span className="ml-2 rounded-full bg-danger-500 px-2 py-0.5 text-xs text-white">
-              {activeAlerts.length}
+              {safeActive.length}
             </span>
           )}
         </button>
@@ -146,14 +166,14 @@ export default function Alerts() {
             <div className="flex justify-center py-8">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
             </div>
-          ) : activeAlerts.length === 0 ? (
+          ) : safeActive.length === 0 ? (
             <div className="card flex flex-col items-center justify-center py-12 text-gray-400">
               <CheckCircle2 className="mb-2 h-8 w-8 text-success-500" />
               <p className="text-sm font-medium text-gray-900">All Clear</p>
               <p className="text-xs">No active alerts</p>
             </div>
           ) : (
-            activeAlerts.map(alert => {
+            safeActive.map(alert => {
               const config = severityConfig[alert.severity] || severityConfig.INFO
               const Icon = config.icon
               return (
@@ -273,5 +293,6 @@ export default function Alerts() {
         </div>
       )}
     </div>
+    </ErrorBoundary>
   )
 }

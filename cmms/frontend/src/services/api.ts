@@ -46,10 +46,12 @@ export const sensorService = {
   list: (params?: Record<string, unknown>) => api.get('/sensors', { params }).then(r => r.data),
   getById: (id: string) => api.get(`/sensors/${id}`).then(r => r.data),
   getReadings: (id: string, params?: Record<string, unknown>) => api.get(`/sensors/${id}/readings`, { params }).then(r => r.data),
+  create: (data: Record<string, unknown>) => api.post('/sensors', data).then(r => r.data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/sensors/${id}`, data).then(r => r.data),
   remove: (id: string) => api.delete(`/sensors/${id}`).then(r => r.data),
   updatePosition: (id: string, position: { x: number; y: number; z: number }) => api.put(`/sensors/${id}/position`, position).then(r => r.data),
   removePosition: (id: string) => api.delete(`/sensors/${id}/position`).then(r => r.data),
+  getAvailableTypes: () => api.get('/sensors/available-types').then(r => r.data),
 }
 
 export const workOrderService = {
@@ -65,8 +67,8 @@ export const workOrderService = {
 export const alertService = {
   getActive: (params?: Record<string, unknown>) => api.get('/alerts/active', { params }).then(r => r.data),
   getHistory: (params?: Record<string, unknown>) => api.get('/alerts/history', { params }).then(r => r.data),
-  acknowledge: (id: string) => api.patch(`/alerts/${id}/acknowledge`).then(r => r.data),
-  resolve: (id: string) => api.patch(`/alerts/${id}/resolve`).then(r => r.data),
+  acknowledge: (id: string) => api.put(`/alerts/${id}/acknowledge`).then(r => r.data),
+  resolve: (id: string) => api.put(`/alerts/${id}/resolve`).then(r => r.data),
 }
 
 export const inspectionService = {

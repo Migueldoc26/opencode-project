@@ -1,8 +1,8 @@
 import prisma from './prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 
-export async function listAssets({ page = 1, limit = 20, search, status, areaId, plantId }) {
-  const where = {};
+export async function listAssets({ page = 1, limit = 20, search, status, areaId, plantId }, companyId) {
+  const where = { companyId };
 
   if (search) {
     where.OR = [
@@ -34,9 +34,9 @@ export async function listAssets({ page = 1, limit = 20, search, status, areaId,
   return { data, total, page, totalPages: Math.ceil(total / limit) };
 }
 
-export async function getAssetById(id) {
-  const asset = await prisma.asset.findUnique({
-    where: { id },
+export async function getAssetById(id, companyId) {
+  const asset = await prisma.asset.findFirst({
+    where: { id, companyId },
     include: {
       area: true,
       plant: true,
@@ -65,24 +65,24 @@ export async function getAssetById(id) {
   return asset;
 }
 
-export async function createAsset(data) {
-  return prisma.asset.create({ data });
+export async function createAsset(data, companyId) {
+  return prisma.asset.create({ data: { ...data, companyId } });
 }
 
-export async function updateAsset(id, data) {
-  const asset = await prisma.asset.findUnique({ where: { id } });
+export async function updateAsset(id, data, companyId) {
+  const asset = await prisma.asset.findFirst({ where: { id, companyId } });
   if (!asset) throw new AppError('Activo no encontrado', 404);
   return prisma.asset.update({ where: { id }, data });
 }
 
-export async function deleteAsset(id) {
-  const asset = await prisma.asset.findUnique({ where: { id } });
+export async function deleteAsset(id, companyId) {
+  const asset = await prisma.asset.findFirst({ where: { id, companyId } });
   if (!asset) throw new AppError('Activo no encontrado', 404);
   return prisma.asset.update({ where: { id }, data: { status: 'DECOMMISSIONED' } });
 }
 
-export async function getAssetSensors(assetId) {
-  const asset = await prisma.asset.findUnique({ where: { id: assetId } });
+export async function getAssetSensors(assetId, companyId) {
+  const asset = await prisma.asset.findFirst({ where: { id: assetId, companyId } });
   if (!asset) throw new AppError('Activo no encontrado', 404);
   return prisma.sensor.findMany({
     where: { assetId },
@@ -91,14 +91,14 @@ export async function getAssetSensors(assetId) {
   });
 }
 
-export async function assignSensor(assetId, sensorId) {
-  const asset = await prisma.asset.findUnique({ where: { id: assetId } });
+export async function assignSensor(assetId, sensorId, companyId) {
+  const asset = await prisma.asset.findFirst({ where: { id: assetId, companyId } });
   if (!asset) throw new AppError('Activo no encontrado', 404);
   return prisma.sensor.update({ where: { id: sensorId }, data: { assetId } });
 }
 
-export async function getAssetReadings(assetId, { from, to, limit = 100 }) {
-  const asset = await prisma.asset.findUnique({ where: { id: assetId } });
+export async function getAssetReadings(assetId, { from, to, limit = 100 }, companyId) {
+  const asset = await prisma.asset.findFirst({ where: { id: assetId, companyId } });
   if (!asset) throw new AppError('Activo no encontrado', 404);
 
   const where = { sensor: { assetId } };
@@ -116,8 +116,8 @@ export async function getAssetReadings(assetId, { from, to, limit = 100 }) {
   });
 }
 
-export async function getAssetMaintenance(assetId) {
-  const asset = await prisma.asset.findUnique({ where: { id: assetId } });
+export async function getAssetMaintenance(assetId, companyId) {
+  const asset = await prisma.asset.findFirst({ where: { id: assetId, companyId } });
   if (!asset) throw new AppError('Activo no encontrado', 404);
   return prisma.maintenanceLog.findMany({
     where: { assetId },

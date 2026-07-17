@@ -8,8 +8,8 @@ const validTransitions = {
   CANCELLED: ['PENDING'],
 };
 
-export async function listWorkOrders({ page = 1, limit = 20, status, priority, assetId, assignedToId }) {
-  const where = {};
+export async function listWorkOrders({ page = 1, limit = 20, status, priority, assetId, assignedToId }, companyId) {
+  const where = { asset: { companyId } };
   if (status) where.status = status;
   if (priority) where.priority = priority;
   if (assetId) where.assetId = assetId;
@@ -34,20 +34,21 @@ export async function listWorkOrders({ page = 1, limit = 20, status, priority, a
   return { data, total, page, totalPages: Math.ceil(total / limit) };
 }
 
-export async function getWorkOrderStats() {
+export async function getWorkOrderStats(companyId) {
+  const baseWhere = { asset: { companyId } };
   const [pending, inProgress, completed, cancelled] = await Promise.all([
-    prisma.workOrder.count({ where: { status: 'PENDING' } }),
-    prisma.workOrder.count({ where: { status: 'IN_PROGRESS' } }),
-    prisma.workOrder.count({ where: { status: 'COMPLETED' } }),
-    prisma.workOrder.count({ where: { status: 'CANCELLED' } }),
+    prisma.workOrder.count({ where: { ...baseWhere, status: 'PENDING' } }),
+    prisma.workOrder.count({ where: { ...baseWhere, status: 'IN_PROGRESS' } }),
+    prisma.workOrder.count({ where: { ...baseWhere, status: 'COMPLETED' } }),
+    prisma.workOrder.count({ where: { ...baseWhere, status: 'CANCELLED' } }),
   ]);
   const total = pending + inProgress + completed + cancelled;
   return { total, pending, inProgress, completed, cancelled };
 }
 
-export async function getWorkOrderById(id) {
-  const workOrder = await prisma.workOrder.findUnique({
-    where: { id },
+export async function getWorkOrderById(id, companyId) {
+  const workOrder = await prisma.workOrder.findFirst({
+    where: { id, asset: { companyId } },
     include: {
       asset: true,
       assignedTo: { select: { id: true, name: true, email: true } },
@@ -63,7 +64,11 @@ export async function getWorkOrderById(id) {
   return workOrder;
 }
 
-export async function createWorkOrder(data, userId) {
+export async function createWorkOrder(data, userId, companyId) {
+  if (data.assetId) {
+    const asset = await prisma.asset.findFirst({ where: { id: data.assetId, companyId } });
+    if (!asset) throw new AppError('Activo no encontrado', 404);
+  }
   const code = await generateWorkOrderCode();
   return prisma.workOrder.create({
     data: {
@@ -97,8 +102,8 @@ async function generateWorkOrderCode() {
   return `OT-${year}-${seq}`;
 }
 
-export async function updateWorkOrder(id, data) {
-  const workOrder = await prisma.workOrder.findUnique({ where: { id } });
+export async function updateWorkOrder(id, data, companyId) {
+  const workOrder = await prisma.workOrder.findFirst({ where: { id, asset: { companyId } } });
   if (!workOrder) throw new AppError('Orden de trabajo no encontrada', 404);
 
   const updateData = { ...data };
@@ -109,8 +114,8 @@ export async function updateWorkOrder(id, data) {
   return prisma.workOrder.update({ where: { id }, data: updateData });
 }
 
-export async function changeWorkOrderStatus(id, newStatus, userId) {
-  const workOrder = await prisma.workOrder.findUnique({ where: { id } });
+export async function changeWorkOrderStatus(id, newStatus, userId, companyId) {
+  const workOrder = await prisma.workOrder.findFirst({ where: { id, asset: { companyId } } });
   if (!workOrder) throw new AppError('Orden de trabajo no encontrada', 404);
 
   const allowed = validTransitions[workOrder.status] || [];
@@ -138,8 +143,8 @@ export async function changeWorkOrderStatus(id, newStatus, userId) {
   return prisma.workOrder.update({ where: { id }, data: updateData });
 }
 
-export async function deleteWorkOrder(id) {
-  const workOrder = await prisma.workOrder.findUnique({ where: { id } });
+export async function deleteWorkOrder(id, companyId) {
+  const workOrder = await prisma.workOrder.findFirst({ where: { id, asset: { companyId } } });
   if (!workOrder) throw new AppError('Orden de trabajo no encontrada', 404);
   return prisma.workOrder.update({ where: { id }, data: { status: 'CANCELLED' } });
 }

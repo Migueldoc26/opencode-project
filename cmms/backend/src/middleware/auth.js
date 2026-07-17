@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { config } from '../config/index.js';
+import config from '../config/index.js';
 import prisma from '../services/prisma.js';
 
 export async function auth(req, res, next) {
@@ -10,10 +10,10 @@ export async function auth(req, res, next) {
     }
 
     const token = header.split(' ')[1];
-    const decoded = jwt.verify(token, config.JWT_SECRET);
+    const decoded = jwt.verify(token, config.jwt?.secret || config.JWT_SECRET);
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
-      select: { id: true, name: true, email: true, role: true, isActive: true },
+      select: { id: true, name: true, email: true, role: true, isActive: true, companyId: true },
     });
 
     if (!user || !user.isActive) {
@@ -35,10 +35,11 @@ export async function optionalAuth(req, res, next) {
     const header = req.headers.authorization;
     if (header && header.startsWith('Bearer ')) {
       const token = header.split(' ')[1];
-      const decoded = jwt.verify(token, config.JWT_SECRET);
+      const secret = config.jwt?.secret || config.JWT_SECRET;
+      const decoded = jwt.verify(token, secret);
       const user = await prisma.user.findUnique({
         where: { id: decoded.id },
-        select: { id: true, name: true, email: true, role: true, isActive: true },
+        select: { id: true, name: true, email: true, role: true, isActive: true, companyId: true },
       });
       if (user && user.isActive) {
         req.user = user;
@@ -48,6 +49,8 @@ export async function optionalAuth(req, res, next) {
   }
   next();
 }
+
+export const authenticate = auth;
 
 export function authorize(...roles) {
   return (req, res, next) => {

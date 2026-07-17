@@ -7,33 +7,33 @@ export async function listInspections(req, res) {
     limit: parseInt(limit) || 20,
     status,
     areaId,
-  });
+  }, req.user.companyId);
   res.json(result);
 }
 
 export async function getInspection(req, res) {
-  const inspection = await inspectionService.getInspectionById(req.params.id);
+  const inspection = await inspectionService.getInspectionById(req.params.id, req.user.companyId);
   res.json(inspection);
 }
 
 export async function createInspection(req, res) {
-  const inspection = await inspectionService.createInspection(req.body);
+  const inspection = await inspectionService.createInspection(req.body, req.user.companyId);
   res.status(201).json(inspection);
 }
 
 export async function updateInspection(req, res) {
-  const inspection = await inspectionService.updateInspection(req.params.id, req.body);
+  const inspection = await inspectionService.updateInspection(req.params.id, req.body, req.user.companyId);
   res.json(inspection);
 }
 
 export async function completeInspection(req, res) {
   const { results } = req.body;
-  const inspection = await inspectionService.completeInspection(req.params.id, results);
+  const inspection = await inspectionService.completeInspection(req.params.id, results, req.user.companyId);
   res.json(inspection);
 }
 
 export async function addAnomaly(req, res) {
-  const anomaly = await inspectionService.addAnomaly(req.params.id, req.body);
+  const anomaly = await inspectionService.addAnomaly(req.params.id, req.body, req.user.companyId);
   res.status(201).json(anomaly);
 }
 
@@ -41,7 +41,7 @@ export async function addMedia(req, res) {
   if (!req.file) {
     return res.status(400).json({ error: 'Archivo requerido' });
   }
-  const media = await inspectionService.addMedia(req.params.id, req.file, req.body.description);
+  const media = await inspectionService.addMedia(req.params.id, req.file, req.body.description, req.user.companyId);
   res.status(201).json(media);
 }
 

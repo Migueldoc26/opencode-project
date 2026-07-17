@@ -9,38 +9,38 @@ export async function listAssets(req, res) {
     status,
     areaId,
     plantId,
-  });
+  }, req.user.companyId);
   res.json(result);
 }
 
 export async function getAsset(req, res) {
-  const asset = await assetService.getAssetById(req.params.id);
+  const asset = await assetService.getAssetById(req.params.id, req.user.companyId);
   res.json(asset);
 }
 
 export async function createAsset(req, res) {
-  const asset = await assetService.createAsset(req.body);
+  const asset = await assetService.createAsset(req.body, req.user.companyId);
   res.status(201).json(asset);
 }
 
 export async function updateAsset(req, res) {
-  const asset = await assetService.updateAsset(req.params.id, req.body);
+  const asset = await assetService.updateAsset(req.params.id, req.body, req.user.companyId);
   res.json(asset);
 }
 
 export async function deleteAsset(req, res) {
-  await assetService.deleteAsset(req.params.id);
+  await assetService.deleteAsset(req.params.id, req.user.companyId);
   res.json({ message: 'Activo descomisionado exitosamente' });
 }
 
 export async function getAssetSensors(req, res) {
-  const sensors = await assetService.getAssetSensors(req.params.id);
+  const sensors = await assetService.getAssetSensors(req.params.id, req.user.companyId);
   res.json(sensors);
 }
 
 export async function assignSensor(req, res) {
   const { sensorId } = req.body;
-  const sensor = await assetService.assignSensor(req.params.id, sensorId);
+  const sensor = await assetService.assignSensor(req.params.id, sensorId, req.user.companyId);
   res.status(201).json(sensor);
 }
 
@@ -50,11 +50,11 @@ export async function getAssetReadings(req, res) {
     from,
     to,
     limit: parseInt(limit) || 100,
-  });
+  }, req.user.companyId);
   res.json(readings);
 }
 
 export async function getAssetMaintenance(req, res) {
-  const logs = await assetService.getAssetMaintenance(req.params.id);
+  const logs = await assetService.getAssetMaintenance(req.params.id, req.user.companyId);
   res.json(logs);
 }

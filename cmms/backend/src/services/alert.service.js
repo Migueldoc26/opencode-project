@@ -1,4 +1,5 @@
 import prisma from './prisma.js';
+import { AppError } from '../middleware/errorHandler.js';
 import logger from '../config/logger.js';
 import { sendNotification } from './notification.service.js';
 
@@ -86,9 +87,9 @@ function checkThreshold(config, value) {
   }
 }
 
-export async function getActiveAlerts() {
+export async function getActiveAlerts(companyId) {
   return prisma.alert.findMany({
-    where: { status: { in: ['ACTIVE', 'ACKNOWLEDGED'] } },
+    where: { status: { in: ['ACTIVE', 'ACKNOWLEDGED'] }, asset: { companyId } },
     include: {
       sensor: { select: { id: true, name: true, code: true, unit: true } },
       asset: { select: { id: true, name: true, code: true } },
@@ -98,10 +99,12 @@ export async function getActiveAlerts() {
   });
 }
 
-export async function getAlertHistory(page = 1, limit = 20) {
+export async function getAlertHistory(page = 1, limit = 20, companyId) {
+  const where = { asset: { companyId } };
   const skip = (page - 1) * limit;
   const [alerts, total] = await Promise.all([
     prisma.alert.findMany({
+      where,
       skip,
       take: limit,
       orderBy: { createdAt: 'desc' },
@@ -113,13 +116,15 @@ export async function getAlertHistory(page = 1, limit = 20) {
         resolvedBy: { select: { id: true, name: true } },
       },
     }),
-    prisma.alert.count(),
+    prisma.alert.count({ where }),
   ]);
   return { data: alerts, total, page, totalPages: Math.ceil(total / limit) };
 }
 
-export async function acknowledgeAlert(id, userId) {
-  const alert = await prisma.alert.update({
+export async function acknowledgeAlert(id, userId, companyId) {
+  const alert = await prisma.alert.findFirst({ where: { id, asset: { companyId } } });
+  if (!alert) throw new AppError('Alerta no encontrada', 404);
+  return prisma.alert.update({
     where: { id },
     data: {
       status: 'ACKNOWLEDGED',
@@ -127,11 +132,12 @@ export async function acknowledgeAlert(id, userId) {
       acknowledgedById: userId,
     },
   });
-  return alert;
 }
 
-export async function resolveAlert(id, userId) {
-  const alert = await prisma.alert.update({
+export async function resolveAlert(id, userId, companyId) {
+  const alert = await prisma.alert.findFirst({ where: { id, asset: { companyId } } });
+  if (!alert) throw new AppError('Alerta no encontrada', 404);
+  return prisma.alert.update({
     where: { id },
     data: {
       status: 'RESOLVED',
@@ -139,5 +145,4 @@ export async function resolveAlert(id, userId) {
       resolvedById: userId,
     },
   });
-  return alert;
 }
