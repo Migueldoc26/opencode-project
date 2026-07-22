@@ -105,3 +105,18 @@ export function emitToAll(event, data) {
   if (!io) return;
   io.emit(event, data);
 }
+
+export function emitSensorReading(sensorId, reading) {
+  if (!io) return;
+  io.to('sensor:' + sensorId).emit('sensor:reading', reading);
+  io.emit('sensor:reading', reading);
+}
+
+export const wsService = {
+  setupWebSocket,
+  getIO,
+  emitToUser,
+  emitToAsset,
+  emitToAll,
+  emitSensorReading,
+};

@@ -25,10 +25,6 @@ export function errorHandler(err, req, res, _next) {
     return res.status(413).json({ error: 'Archivo demasiado grande' });
   }
 
-  if (err.status) {
-    return res.status(err.status).json({ error: err.message });
-  }
-
   const statusCode = err.statusCode || 500;
   const message = statusCode === 500 && process.env.NODE_ENV === 'production'
     ? 'Error interno del servidor'
@@ -50,7 +46,6 @@ export class AppError extends Error {
   constructor(message, statusCode = 500) {
     super(message);
     this.statusCode = statusCode;
-    this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
     this.isOperational = true;
     Error.captureStackTrace(this, this.constructor);
   }

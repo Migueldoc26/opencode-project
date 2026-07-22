@@ -146,3 +146,11 @@ export async function resolveAlert(id, userId, companyId) {
     },
   });
 }
+
+export const alertService = {
+  evaluateAlert,
+  getActiveAlerts,
+  getAlertHistory,
+  acknowledgeAlert,
+  resolveAlert,
+};

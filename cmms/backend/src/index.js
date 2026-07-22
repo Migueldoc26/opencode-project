@@ -13,7 +13,7 @@ import { validateConfig } from './config/validate.js';
 import logger from './config/logger.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { setupWebSocket } from './websocket/ws.service.js';
-import { startMqttClient } from './mqtt/mqtt.service.js';
+import { mqttService } from './mqtt/mqtt.service.js';
 import { setSocketIO } from './services/notification.service.js';
 
 import authRoutes from './routes/auth.routes.js';
@@ -138,7 +138,7 @@ app.use(errorHandler);
 const io = setupWebSocket(server);
 setSocketIO(io);
 
-startMqttClient().catch((err) => {
+mqttService.connect().catch((err) => {
   logger.error('Error iniciando MQTT:', err);
 });
 

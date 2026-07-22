@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (token) {
       setAuthHeader(token)
       api.get('/auth/me')
-        .then(res => setUser(res.data.data))
+        .then(res => setUser(res.data))
         .catch(() => {
           localStorage.removeItem('cmms_token')
           setToken(null)
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await api.post('/auth/login', { email, password })
-    const { token: newToken, user: userData } = res.data.data
+    const { token: newToken, user: userData } = res.data
     localStorage.setItem('cmms_token', newToken)
     setToken(newToken)
     setUser(userData)
