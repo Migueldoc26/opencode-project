@@ -67,6 +67,12 @@ interface AssetRecord {
   area?: string
 }
 
+const getModelExtFromUrl = (url?: string) => {
+  if (!url) return undefined
+  const cleanUrl = url.split('?')[0]
+  return normalizeModelExt(cleanUrl.split('.').pop()?.toLowerCase())
+}
+
 const DEFAULT_PREDEFINED = [
   { id: 'obj-machine', name: 'Máquina', modelType: 'machine', category: 'Equipos', color: '#2563eb' },
   { id: 'obj-motor', name: 'Motor', modelType: 'motor', category: 'Equipos', color: '#dc2626' },
@@ -1080,18 +1086,21 @@ export default function DigitalTwin() {
   }, [])
 
   const addAssetToScene = useCallback((asset: AssetRecord) => {
+    const twin = twins.find(currentTwin => currentTwin.asset?.id === asset.id && currentTwin.modelUrl)
     addSceneItem({
       type: 'object',
       name: asset.name,
       assetId: asset.id,
       assetName: asset.name,
-      modelType: getAssetModelType(asset.type),
+      modelType: twin?.modelUrl ? undefined : getAssetModelType(asset.type),
+      modelUrl: twin?.modelUrl,
+      modelExt: getModelExtFromUrl(twin?.modelUrl),
       category: asset.type || asset.area || asset.location || 'Activo',
       color: asset.status === 'BREAKDOWN' ? '#dc2626' : asset.status === 'MAINTENANCE' ? '#ca8a04' : '#2563eb',
       position: [Math.random() * 8 - 4, 0, Math.random() * 8 - 4],
     })
     setMode('move')
-  }, [addSceneItem, getAssetModelType])
+  }, [addSceneItem, getAssetModelType, twins])
 
   const deleteSelectedObject = useCallback(() => {
     const id = selectedIdRef.current
@@ -1445,7 +1454,7 @@ export default function DigitalTwin() {
                       </div>
                     </button>
                     <button onClick={() => deletePredefinedObject(obj.id)}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-gray-300 opacity-0 transition-opacity hover:bg-danger-50 hover:text-danger-600 group-hover:opacity-100"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 transition-colors hover:bg-danger-50 hover:text-danger-600"
                       title="Eliminar de la lista">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M18 6 6 18" /><path d="m6 6 12 12" />
@@ -1464,7 +1473,10 @@ export default function DigitalTwin() {
                         </div>
                         <div className="min-w-0">
                           <p className="truncate font-medium text-gray-800">{asset.name}</p>
-                          <p className="truncate text-[10px] text-gray-400">{asset.type || asset.code || 'Activo'}</p>
+                          <p className="truncate text-[10px] text-gray-400">
+                            {asset.type || asset.code || 'Activo'}
+                            {twins.some(twin => twin.asset?.id === asset.id && twin.modelUrl) ? ' · modelo 3D' : ''}
+                          </p>
                         </div>
                         <Plus className="ml-auto h-3.5 w-3.5 text-gray-300" />
                       </button>
@@ -1475,7 +1487,15 @@ export default function DigitalTwin() {
                   <>
                     <p className="mt-3 px-2 py-1 text-[10px] font-medium uppercase text-gray-400">Tus gemelos digitales</p>
                     {twins.filter(t => t.modelUrl).map(t => (
-                      <button key={t.id} onClick={() => addSceneItem({ name: t.name, position: [Math.random() * 4 - 2, 0, Math.random() * 4 - 2] })}
+                      <button key={t.id} onClick={() => addSceneItem({
+                        name: t.asset?.name || t.name,
+                        assetId: t.asset?.id,
+                        assetName: t.asset?.name,
+                        modelUrl: t.modelUrl,
+                        modelExt: getModelExtFromUrl(t.modelUrl),
+                        category: t.asset?.code || 'Modelo 3D',
+                        position: [Math.random() * 4 - 2, 0, Math.random() * 4 - 2],
+                      })}
                         className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs hover:bg-gray-50 transition-colors">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100">
                           <Box className="h-4 w-4 text-gray-500" />

@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Server, Activity, Thermometer, Gauge, Droplets,
-  Wrench, Clock, FileText, AlertTriangle, Cpu,
+  Wrench, Clock, FileText, AlertTriangle, Cpu, Upload, Box,
 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { assetService } from '../services/api'
+import { assetService, digitalTwinService } from '../services/api'
 
 const readingHistory = [
   { time: '00:00', temperature: 72, pressure: 4.1, vibration: 1.2 },
@@ -58,7 +58,10 @@ export default function AssetDetail() {
   const navigate = useNavigate()
   const [asset, setAsset] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
+  const [modelUploading, setModelUploading] = useState(false)
+  const [modelError, setModelError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'info' | 'sensors' | 'maintenance' | 'documents'>('info')
+  const modelInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!id) return
@@ -80,9 +83,44 @@ export default function AssetDetail() {
   if (!asset) return null
 
   const assetSensors = getAssetSensors(asset)
+  const assetTwin = asset.digitalTwin as { id?: string; name?: string; modelUrl?: string } | undefined
+
+  const handleModelUpload = async (file: File) => {
+    if (!id) return
+    setModelUploading(true)
+    setModelError(null)
+    try {
+      let twin = assetTwin?.id ? assetTwin : null
+      if (!twin?.id) {
+        twin = await digitalTwinService.create({ name: asset.name || 'Gemelo digital', assetId: id })
+      }
+
+      const formData = new FormData()
+      formData.append('model', file)
+      const updatedTwin = await digitalTwinService.uploadModel(twin.id, formData)
+      setAsset(prev => prev ? { ...prev, digitalTwin: { ...twin, ...updatedTwin } } : prev)
+    } catch (err: unknown) {
+      const apiError = (err as any)?.response?.data
+      setModelError(apiError?.error?.message || apiError?.message || 'No se pudo cargar el objeto 3D del activo.')
+    } finally {
+      setModelUploading(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
+      <input
+        ref={modelInputRef}
+        type="file"
+        accept=".glb,.gltf,.obj,.stl"
+        className="hidden"
+        onChange={e => {
+          const file = e.target.files?.[0]
+          if (file) handleModelUpload(file)
+          e.target.value = ''
+        }}
+      />
+
       {/* Header */}
       <div className="flex items-center gap-4">
         <button onClick={() => navigate('/assets')} className="btn-secondary px-3 py-2">
@@ -131,6 +169,35 @@ export default function AssetDetail() {
                   <p className="font-medium text-gray-900">{value || '-'}</p>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Objeto 3D del activo</h3>
+              <Box className="h-4 w-4 text-gray-400" />
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="rounded-lg border p-3">
+                <p className="font-medium text-gray-900">
+                  {assetTwin?.modelUrl ? 'Modelo cargado para este activo' : 'Sin modelo 3D asociado'}
+                </p>
+                <p className="mt-1 break-all text-xs text-gray-500">
+                  {assetTwin?.modelUrl || 'Carga un GLB, OBJ o STL para usar este activo como objeto real en Gemelo Digital.'}
+                </p>
+              </div>
+              {modelError && (
+                <div className="rounded-lg bg-danger-50 p-3 text-xs text-danger-700">{modelError}</div>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => modelInputRef.current?.click()} disabled={modelUploading} className="btn-primary flex items-center gap-2 px-3 py-2 text-xs">
+                  <Upload className="h-4 w-4" />
+                  {modelUploading ? 'Cargando...' : assetTwin?.modelUrl ? 'Reemplazar objeto 3D' : 'Cargar objeto 3D'}
+                </button>
+                <button onClick={() => navigate('/digital-twin')} className="btn-secondary px-3 py-2 text-xs">
+                  Abrir Gemelo Digital
+                </button>
+              </div>
             </div>
           </div>
 
