@@ -30,6 +30,7 @@ interface Thresholds {
 interface SceneItem {
   id: string; type: 'object' | 'sensor'
   name: string; modelType?: string; modelUrl?: string; modelExt?: string; category?: string
+  assetId?: string; assetName?: string
   sensorId?: string
   modelFile?: File
   position: [number, number, number]
@@ -54,6 +55,16 @@ interface SensorRecord {
   assetName?: string
   mqttTopic?: string
   position?: { x: number; y: number; z: number }
+}
+
+interface AssetRecord {
+  id: string
+  name: string
+  code?: string
+  type?: string
+  status?: string
+  location?: string
+  area?: string
 }
 
 const DEFAULT_PREDEFINED = [
@@ -270,6 +281,7 @@ function serializeSceneItem(item: SceneItem) {
   return {
     id: item.id, type: item.type, name: item.name, sensorId: item.sensorId,
     modelType: item.modelType, modelUrl: item.modelUrl, modelExt: item.modelExt, category: item.category,
+    assetId: item.assetId, assetName: item.assetName,
     position: item.position, rotation: item.rotation, scale: item.scale,
     visible: item.visible, locked: item.locked, color: item.color,
     sensorType: item.sensorType, dataSource: item.dataSource, thresholds: item.thresholds,
@@ -715,7 +727,7 @@ function SceneItem3D({ item, selected, mode, selectedSensorId, onSelect, onEndTr
   const transformRootRef = useRef<Group>(null)
 
   const color = item.color || '#2563eb'
-  const showGizmo = selected && mode !== 'select' && !item.locked
+  const showGizmo = selected && item.visible && mode !== 'select' && !item.locked
 
   const transformMode =
     mode === "move" ? "translate"
@@ -881,6 +893,7 @@ export default function DigitalTwin() {
   const [historyIdx, setHistoryIdx] = useState(-1)
   const [predefinedObjects, setPredefinedObjects] = useState(loadPredefined)
   const [availableSensors, setAvailableSensors] = useState<SensorRecord[]>([])
+  const [availableAssets, setAvailableAssets] = useState<AssetRecord[]>([])
   const [sensorsLoading, setSensorsLoading] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>()
@@ -926,6 +939,22 @@ export default function DigitalTwin() {
       })
       .finally(() => {
         if (!cancelled) setSensorsLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    assetService.list({ limit: 500 })
+      .then((data) => {
+        if (cancelled) return
+        const assets = Array.isArray(data) ? data : data.items || data.data || []
+        setAvailableAssets(assets)
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableAssets([])
       })
 
     return () => { cancelled = true }
@@ -1039,6 +1068,31 @@ export default function DigitalTwin() {
     setMode('move')
   }, [addSceneItem, getSensorColor, normalizeSensorStatus])
 
+  const getAssetModelType = useCallback((assetType?: string) => {
+    const value = (assetType || '').toLowerCase()
+    if (value.includes('motor')) return 'motor'
+    if (value.includes('pump') || value.includes('bomba')) return 'pump'
+    if (value.includes('tank') || value.includes('estanque')) return 'tank'
+    if (value.includes('panel') || value.includes('tablero')) return 'panel'
+    if (value.includes('pipe') || value.includes('tuber')) return 'pipe'
+    if (value.includes('conveyor') || value.includes('cinta')) return 'conveyor'
+    return 'machine'
+  }, [])
+
+  const addAssetToScene = useCallback((asset: AssetRecord) => {
+    addSceneItem({
+      type: 'object',
+      name: asset.name,
+      assetId: asset.id,
+      assetName: asset.name,
+      modelType: getAssetModelType(asset.type),
+      category: asset.type || asset.area || asset.location || 'Activo',
+      color: asset.status === 'BREAKDOWN' ? '#dc2626' : asset.status === 'MAINTENANCE' ? '#ca8a04' : '#2563eb',
+      position: [Math.random() * 8 - 4, 0, Math.random() * 8 - 4],
+    })
+    setMode('move')
+  }, [addSceneItem, getAssetModelType])
+
   const deleteSelectedObject = useCallback(() => {
     const id = selectedIdRef.current
     if (!id) return
@@ -1060,6 +1114,18 @@ export default function DigitalTwin() {
       return n
     })
   }, [pushHistory])
+
+  const toggleSelectedVisibility = useCallback(() => {
+    if (!selectedItem) return
+    const nextVisible = !selectedItem.visible
+
+    if (!nextVisible) {
+      setMode('select')
+      selectObject(null)
+    }
+
+    updateItem(selectedItem.id, { visible: nextVisible })
+  }, [selectedItem, selectObject, updateItem])
 
   const handleEndTransform = useCallback((id: string, pos: [number, number, number], rot: [number, number, number], scl: [number, number, number]) => {
     const item = sceneItemsRef.current.find(currentItem => currentItem.id === id)
@@ -1387,6 +1453,24 @@ export default function DigitalTwin() {
                     </button>
                   </div>
                 ))}
+                {availableAssets.length > 0 && (
+                  <>
+                    <p className="mt-3 px-2 py-1 text-[10px] font-medium uppercase text-gray-400">Activos registrados</p>
+                    {availableAssets.map(asset => (
+                      <button key={asset.id} onClick={() => addAssetToScene(asset)}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs hover:bg-gray-50 transition-colors">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50">
+                          <Server className="h-4 w-4 text-primary-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-gray-800">{asset.name}</p>
+                          <p className="truncate text-[10px] text-gray-400">{asset.type || asset.code || 'Activo'}</p>
+                        </div>
+                        <Plus className="ml-auto h-3.5 w-3.5 text-gray-300" />
+                      </button>
+                    ))}
+                  </>
+                )}
                 {twins.filter(t => t.modelUrl).length > 0 && (
                   <>
                     <p className="mt-3 px-2 py-1 text-[10px] font-medium uppercase text-gray-400">Tus gemelos digitales</p>
@@ -1524,7 +1608,7 @@ export default function DigitalTwin() {
                     <p className="text-[10px] text-gray-400 uppercase">{selectedItem.type === 'sensor' ? (selectedItem.sensorType || 'Sensor') : (selectedItem.modelType || 'Objeto')}</p>
                   </div>
                   <div className="flex gap-1">
-                    <button onClick={() => updateItem(selectedItem.id, { visible: !selectedItem.visible })} className={`rounded p-1.5 ${selectedItem.visible ? 'text-gray-500 hover:bg-gray-100' : 'text-gray-300'}`}>
+                    <button onClick={toggleSelectedVisibility} className={`rounded p-1.5 ${selectedItem.visible ? 'text-gray-500 hover:bg-gray-100' : 'text-gray-300'}`}>
                       {selectedItem.visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
                     </button>
                     <button onClick={() => updateItem(selectedItem.id, { locked: !selectedItem.locked })} className={`rounded p-1.5 ${selectedItem.locked ? 'text-danger-500' : 'text-gray-500 hover:bg-gray-100'}`}>
