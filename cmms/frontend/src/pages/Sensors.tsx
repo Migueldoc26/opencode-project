@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Thermometer, Gauge, Activity, Droplets, Zap, Wind,
-  Search, Edit, Trash2, Plus, X, Bell, SlidersHorizontal, Wifi,
+  Search, Edit, Trash2, Plus, X, Bell, SlidersHorizontal, Wifi, Box,
 } from 'lucide-react'
 import api, { sensorService, assetService } from '../services/api'
 
@@ -76,6 +77,7 @@ const emptyForm: SensorForm = {
 }
 
 export default function Sensors() {
+  const navigate = useNavigate()
   const [sensors, setSensors] = useState<Sensor[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -337,6 +339,14 @@ export default function Sensors() {
                   </button>
                   <button onClick={() => openTestModal(sensor)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-cyan-600" title="Test MQTT">
                     <Wifi className="h-4 w-4" />
+                  </button>
+                  {sensor.assetId && (
+                    <button onClick={() => navigate(`/assets/${sensor.assetId}`)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-primary-600" title="Ver activo">
+                      <Server className="h-4 w-4" />
+                    </button>
+                  )}
+                  <button onClick={() => navigate('/digital-twin')} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-primary-600" title="Ubicar en gemelo digital">
+                    <Box className="h-4 w-4" />
                   </button>
                 </div>
               </div>

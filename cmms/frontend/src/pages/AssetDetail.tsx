@@ -16,6 +16,43 @@ const readingHistory = [
   { time: '20:00', temperature: 71, pressure: 4.1, vibration: 1.0 },
 ]
 
+interface AssetSensor {
+  id?: string
+  name?: string
+  type?: string
+  unit?: string
+  value?: number | string | null
+  lastValue?: number | string | null
+  status?: string | null
+  mqttTopic?: string | null
+}
+
+const getAssetSensors = (asset: Record<string, unknown>): AssetSensor[] => (
+  Array.isArray(asset.sensors) ? asset.sensors.filter(Boolean) as AssetSensor[] : []
+)
+
+const formatSensorValue = (sensor: AssetSensor) => {
+  const value = sensor.value ?? sensor.lastValue
+  if (value === undefined || value === null || value === '') return '-'
+  return `${value}${sensor.unit ? ` ${sensor.unit}` : ''}`
+}
+
+const getSensorIcon = (type?: string) => {
+  const normalized = (type || '').toUpperCase()
+  if (normalized.includes('TEMP')) return Thermometer
+  if (normalized.includes('PRESSURE')) return Gauge
+  if (normalized.includes('FLOW') || normalized.includes('LEVEL') || normalized.includes('HUMID')) return Droplets
+  return Activity
+}
+
+const getSensorStatusClass = (status?: string | null) => {
+  const normalized = (status || '').toLowerCase()
+  if (normalized.includes('critical') || normalized.includes('alarm')) return 'bg-danger-500'
+  if (normalized.includes('warning')) return 'bg-warning-500'
+  if (normalized.includes('inactive') || normalized.includes('offline')) return 'bg-gray-400'
+  return 'bg-success-500'
+}
+
 export default function AssetDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -41,6 +78,8 @@ export default function AssetDetail() {
   }
 
   if (!asset) return null
+
+  const assetSensors = getAssetSensors(asset)
 
   return (
     <div className="space-y-6">
@@ -137,28 +176,36 @@ export default function AssetDetail() {
           <div className="card">
             <div className="card-header">
               <h3 className="card-title">Sensors</h3>
-              <Activity className="h-4 w-4 text-gray-400" />
+              <div className="flex items-center gap-2">
+                <button onClick={() => navigate('/sensors')} className="btn-secondary px-3 py-1.5 text-xs">Ver sensores</button>
+                <button onClick={() => navigate('/digital-twin')} className="btn-primary px-3 py-1.5 text-xs">Abrir gemelo</button>
+              </div>
             </div>
             <div className="space-y-3">
-              {[
-                { name: 'Temperature Sensor', type: 'Temperature', value: '74.2°C', status: 'normal' },
-                { name: 'Pressure Gauge', type: 'Pressure', value: '4.2 bar', status: 'normal' },
-                { name: 'Vibration Monitor', type: 'Vibration', value: '1.4 mm/s', status: 'warning' },
-              ].map((s, i) => (
-                <div key={i} className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`h-2 w-2 rounded-full ${
-                      s.status === 'critical' ? 'bg-danger-500' :
-                      s.status === 'warning' ? 'bg-warning-500' : 'bg-success-500'
-                    }`} />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{s.name}</p>
-                      <p className="text-xs text-gray-500">{s.type}</p>
+              {assetSensors.length > 0 ? (
+                assetSensors.map(sensor => {
+                  const SensorIcon = getSensorIcon(sensor.type)
+                  return (
+                    <div key={sensor.id || sensor.name} className="flex items-center justify-between rounded-lg border p-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className={`h-2 w-2 shrink-0 rounded-full ${getSensorStatusClass(sensor.status)}`} />
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+                          <SensorIcon className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-gray-900">{sensor.name || 'Sensor'}</p>
+                          <p className="truncate text-xs text-gray-500">{sensor.type || 'Sin tipo'}{sensor.mqttTopic ? ` - ${sensor.mqttTopic}` : ''}</p>
+                        </div>
+                      </div>
+                      <span className="ml-3 whitespace-nowrap text-sm font-mono font-medium text-gray-900">{formatSensorValue(sensor)}</span>
                     </div>
-                  </div>
-                  <span className="text-sm font-mono font-medium text-gray-900">{s.value}</span>
+                  )
+                })
+              ) : (
+                <div className="rounded-lg border border-dashed p-4 text-sm text-gray-500">
+                  Este activo todavia no tiene sensores asociados. Crea o edita un sensor y selecciona este activo para que aparezca aqui y en el gemelo digital.
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
