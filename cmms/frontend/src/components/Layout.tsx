@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, CircuitBoard, Server, Activity, ClipboardList,
   Bell, SearchCheck, BarChart3, Settings, LogOut, Menu,
@@ -11,6 +11,7 @@ import { useWebSocket } from '../context/WebSocketContext'
 import { useTranslation } from '../context/TranslationContext'
 import Logo from './common/Logo'
 import ProfileModal from './ProfileModal'
+import ErrorBoundary from './ErrorBoundary'
 
 export default function Layout() {
   const { t, lang, setLang } = useTranslation()
@@ -21,6 +22,7 @@ export default function Layout() {
   const { user, logout } = useAuth()
   const { connected } = useWebSocket()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const navSections = [
     {
@@ -198,7 +200,20 @@ export default function Layout() {
         </header>
 
         <main className="flex-1 overflow-y-auto bg-gray-50/60 p-4 dark:bg-gray-950/50 lg:p-6">
-          <Outlet />
+          <ErrorBoundary
+            resetKey={location.pathname}
+            fallback={
+              <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-center text-gray-500">
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">La vista tuvo un problema.</p>
+                <p className="max-w-md text-xs">La plataforma sigue activa. Recarga esta vista o vuelve a entrar desde el menu.</p>
+                <button onClick={() => window.location.reload()} className="btn-secondary px-4 py-2 text-xs">
+                  Recargar vista
+                </button>
+              </div>
+            }
+          >
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
 
