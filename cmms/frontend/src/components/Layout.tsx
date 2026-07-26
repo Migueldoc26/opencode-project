@@ -37,19 +37,9 @@ export default function Layout() {
       items: [
         { to: '/assets', icon: Server, label: t('nav.assets') },
         { to: '/sensors', icon: Activity, label: t('nav.sensors') },
-      ],
-    },
-    {
-      label: 'Mantenimiento',
-      items: [
+        { to: '/mqtt-inspector', icon: Radio, label: 'MQTT Test' },
         { to: '/inspections', icon: SearchCheck, label: t('nav.inspections') },
         { to: '/work-orders', icon: ClipboardList, label: t('nav.work-orders') },
-      ],
-    },
-    {
-      label: 'Integraciones',
-      items: [
-        { to: '/mqtt-inspector', icon: Radio, label: 'MQTT Test' },
       ],
     },
     {
