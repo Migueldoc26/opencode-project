@@ -14,7 +14,7 @@ import {
   Maximize2, Minimize2, Undo2, Redo2,
   Layers, Plus, Search, Settings, Radio, Droplets, Zap, Wind, Waves, ArrowUp, ArrowDown,
 } from 'lucide-react'
-import { digitalTwinService, assetService } from '../services/api'
+import { digitalTwinService, assetService, sensorService } from '../services/api'
 
 type ToolMode = 'select' | 'move' | 'rotate' | 'scale'
 
@@ -29,6 +29,7 @@ interface Thresholds {
 interface SceneItem {
   id: string; type: 'object' | 'sensor'
   name: string; modelType?: string; modelUrl?: string; modelExt?: string; category?: string
+  sensorId?: string
   modelFile?: File
   position: [number, number, number]
   rotation: [number, number, number]
@@ -37,6 +38,21 @@ interface SceneItem {
   sensorType?: string; dataSource?: DataSource; thresholds?: Thresholds
   lastValue?: number; lastValueAt?: string
   status?: 'normal' | 'warning' | 'critical' | 'disconnected'
+}
+
+interface SensorRecord {
+  id: string
+  name: string
+  type: string
+  unit?: string
+  value?: number
+  lastValue?: number
+  lastValueAt?: string
+  status?: string
+  assetId?: string
+  assetName?: string
+  mqttTopic?: string
+  position?: { x: number; y: number; z: number }
 }
 
 const DEFAULT_PREDEFINED = [
@@ -523,14 +539,7 @@ function ModelRenderer({
       )
 
     default:
-      console.error("Extensión 3D no reconocida", { original: ext, normalized: normalizedExt, url })
-      return (
-        <Html center>
-          <div className="rounded bg-red-600 px-3 py-2 text-xs text-white">
-            Formato 3D no reconocido: {ext || 'sin extensión'}
-          </div>
-        </Html>
-      )
+      return null
   }
 }
 
@@ -587,12 +596,6 @@ function SceneItem3D({ item, selected, mode, onSelect, onEndTransform }: {
 
   return (
     <group ref={transformRootRef}>
-      {/* Debug marker: always visible to confirm the group renders */}
-      <mesh position={[0, -0.5, 0]}>
-        <boxGeometry args={[0.2, 0.2, 0.2]} />
-        <meshStandardMaterial color="#00ff00" />
-      </mesh>
-
       {item.modelUrl ? (
         <Suspense fallback={<ModelLoadingIndicator />}>
           <ModelRenderer url={item.modelUrl} ext={item.modelExt} file={item.modelFile}
@@ -675,6 +678,8 @@ export default function DigitalTwin() {
   const [history, setHistory] = useState<SceneItem[][]>([])
   const [historyIdx, setHistoryIdx] = useState(-1)
   const [predefinedObjects, setPredefinedObjects] = useState(loadPredefined)
+  const [availableSensors, setAvailableSensors] = useState<SensorRecord[]>([])
+  const [sensorsLoading, setSensorsLoading] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>()
 
@@ -703,6 +708,26 @@ export default function DigitalTwin() {
   }, [])
 
   useEffect(() => { loadTwins() }, [loadTwins])
+
+  useEffect(() => {
+    let cancelled = false
+    setSensorsLoading(true)
+
+    sensorService.list({ limit: 500 })
+      .then((data) => {
+        if (cancelled) return
+        const sensors = Array.isArray(data) ? data : data.items || data.data || []
+        setAvailableSensors(sensors)
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableSensors([])
+      })
+      .finally(() => {
+        if (!cancelled) setSensorsLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [])
 
   const loadScene = useCallback(async () => {
     try {
@@ -762,6 +787,18 @@ export default function DigitalTwin() {
     savePredefined(DEFAULT_PREDEFINED)
   }, [])
 
+  const getSensorColor = useCallback((type?: string) => {
+    return SENSOR_TYPES.find(s => s.type === type)?.color || '#2563eb'
+  }, [])
+
+  const normalizeSensorStatus = useCallback((status?: string): SceneItem['status'] => {
+    const value = status?.toLowerCase()
+    if (value === 'critical' || value === 'alarm') return 'critical'
+    if (value === 'warning') return 'warning'
+    if (value === 'disconnected' || value === 'offline') return 'disconnected'
+    return 'normal'
+  }, [])
+
   const addSceneItem = useCallback((template: Partial<SceneItem>) => {
     const item: SceneItem = {
       id: genId(), type: 'object', name: 'Nuevo Objeto',
@@ -773,17 +810,37 @@ export default function DigitalTwin() {
     selectObject(item.id)
   }, [pushHistory])
 
+  const addSensorToScene = useCallback((sensor: SensorRecord) => {
+    const sensorPosition = sensor.position
+      ? [sensor.position.x, sensor.position.y, sensor.position.z] as [number, number, number]
+      : [0, 1.2, 0] as [number, number, number]
+
+    addSceneItem({
+      type: 'sensor',
+      name: sensor.name,
+      sensorId: sensor.id,
+      sensorType: sensor.type,
+      category: sensor.assetName || 'Sensor',
+      color: getSensorColor(sensor.type),
+      scale: [0.45, 0.45, 0.45],
+      position: sensorPosition,
+      dataSource: {
+        deviceId: sensor.assetId || '',
+        variableId: sensor.id,
+        unit: sensor.unit || '',
+        topic: sensor.mqttTopic || '',
+      },
+      lastValue: sensor.lastValue ?? sensor.value,
+      lastValueAt: sensor.lastValueAt,
+      status: normalizeSensorStatus(sensor.status),
+    })
+  }, [addSceneItem, getSensorColor, normalizeSensorStatus])
+
   const deleteSelectedObject = useCallback(() => {
     const id = selectedIdRef.current
     if (!id) return
-    setSceneItems(prev => {
-      if (!prev.find(i => i.id === id)) return prev
-      const n = prev.filter(i => i.id !== id)
-      pushHistory(n)
-      return n
-    })
-    selectObject(null)
-  }, [pushHistory])
+    removeSceneItem(id)
+  }, [removeSceneItem])
 
   const duplicateSelected = useCallback(() => {
     if (!selectedItem) return
@@ -802,6 +859,8 @@ export default function DigitalTwin() {
   }, [pushHistory])
 
   const handleEndTransform = useCallback((id: string, pos: [number, number, number], rot: [number, number, number], scl: [number, number, number]) => {
+    const item = sceneItemsRef.current.find(currentItem => currentItem.id === id)
+
     setSceneItems((currentItems) =>
       currentItems.map((currentItem) =>
         currentItem.id === id
@@ -809,6 +868,10 @@ export default function DigitalTwin() {
           : currentItem
       )
     )
+
+    if (item?.type === 'sensor' && item.sensorId) {
+      sensorService.updatePosition(item.sensorId, { x: pos[0], y: pos[1], z: pos[2] }).catch(() => {})
+    }
   }, [])
 
   const twinIdRef = useRef<string | null>(localStorage.getItem('dt_twinId'))
@@ -843,7 +906,7 @@ export default function DigitalTwin() {
 
     const items = sceneItemsRef.current
     const payload = { metadata: { sceneItems: items.map(i => ({
-      id: i.id, type: i.type, name: i.name,
+      id: i.id, type: i.type, name: i.name, sensorId: i.sensorId,
       modelType: i.modelType, modelUrl: i.modelUrl, modelExt: i.modelExt, category: i.category,
       position: i.position, rotation: i.rotation, scale: i.scale,
       visible: i.visible, locked: i.locked, color: i.color,
@@ -1042,7 +1105,9 @@ export default function DigitalTwin() {
                     <p className="px-2 py-1 text-[10px] font-medium uppercase text-gray-400">Objetos en escena</p>
                     {sceneItems.map(item => (
                       <div key={item.id} className="group relative">
-                        <div className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 pr-8 text-left text-xs ${selectedId === item.id ? 'bg-primary-50 ring-1 ring-primary-200' : ''}`}>
+                        <div role="button" tabIndex={0} onClick={() => selectObject(item.id)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectObject(item.id) }}
+                          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 pr-8 text-left text-xs ${selectedId === item.id ? 'bg-primary-50 ring-1 ring-primary-200' : 'hover:bg-gray-50'}`}>
                           <div style={{ backgroundColor: (item.color || '#2563eb') + '20' }} className="flex h-8 w-8 items-center justify-center rounded-lg">
                             <div style={{ backgroundColor: item.color || '#2563eb' }} className="h-4 w-4 rounded" />
                           </div>
@@ -1050,8 +1115,8 @@ export default function DigitalTwin() {
                             <p className="font-medium text-gray-800 truncate">{item.name}</p>
                             <p className="text-[10px] text-gray-400">{item.type === 'sensor' ? (item.sensorType || 'Sensor') : (item.modelType || 'Objeto')}</p>
                           </div>
-                          <button onClick={() => removeSceneItem(item.id)}
-                            className="rounded p-1 text-gray-300 opacity-0 transition-opacity hover:bg-danger-50 hover:text-danger-600 group-hover:opacity-100"
+                          <button type="button" onClick={(e) => { e.stopPropagation(); removeSceneItem(item.id) }}
+                            className="rounded p-1 text-gray-400 transition-colors hover:bg-danger-50 hover:text-danger-600"
                             title="Eliminar">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M18 6 6 18" /><path d="m6 6 12 12" />
@@ -1116,21 +1181,20 @@ export default function DigitalTwin() {
 
             {libraryTab === 'sensors' && (
               <div className="p-2 space-y-1">
-                <p className="px-2 py-1 text-[10px] font-medium uppercase text-gray-400">Tipos de sensores</p>
-                  {SENSOR_TYPES.map(st => (
-                    <button key={st.type} onClick={() => addSceneItem({
-                      type: 'sensor', name: `Sensor ${st.label}`, sensorType: st.type,
-                      category: 'sensor', color: st.color, scale: [0.8, 0.8, 0.8],
-                      position: [Math.random() * 8 - 4, 0.5, Math.random() * 8 - 4],
-                      dataSource: { deviceId: '', variableId: '', unit: st.unit, topic: '' },
-                    })}
+                <p className="px-2 py-1 text-[10px] font-medium uppercase text-gray-400">Sensores registrados</p>
+                {sensorsLoading && <p className="px-2 py-2 text-xs text-gray-400">Cargando sensores...</p>}
+                {!sensorsLoading && availableSensors.length === 0 && (
+                  <p className="px-2 py-2 text-xs text-gray-400">No hay sensores creados en Gestion de Sensores.</p>
+                )}
+                {availableSensors.map(sensor => (
+                  <button key={sensor.id} onClick={() => addSensorToScene(sensor)}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs hover:bg-gray-50 transition-colors">
-                    <div style={{ backgroundColor: st.color + '20' }} className="flex h-8 w-8 items-center justify-center rounded-lg">
-                      {getSensorIcon(st.type)}
+                    <div style={{ backgroundColor: getSensorColor(sensor.type) + '20' }} className="flex h-8 w-8 items-center justify-center rounded-lg">
+                      {getSensorIcon(sensor.type)}
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-800">{st.label}</p>
-                      <p className="text-[10px] text-gray-400">{st.unit}</p>
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-800 truncate">{sensor.name}</p>
+                      <p className="text-[10px] text-gray-400 truncate">{sensor.assetName || sensor.type}{sensor.unit ? ` · ${sensor.unit}` : ''}</p>
                     </div>
                     <Plus className="ml-auto h-3.5 w-3.5 text-gray-300" />
                   </button>
