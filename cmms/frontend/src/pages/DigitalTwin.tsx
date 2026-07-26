@@ -15,6 +15,7 @@ import {
   Layers, Plus, Search, Settings, Radio, Droplets, Zap, Wind, Waves, ArrowUp, ArrowDown,
 } from 'lucide-react'
 import { digitalTwinService, assetService, sensorService } from '../services/api'
+import ErrorBoundary from '../components/ErrorBoundary'
 
 type ToolMode = 'select' | 'move' | 'rotate' | 'scale'
 
@@ -663,22 +664,32 @@ function SceneItem3D({ item, selected, mode, selectedSensorId, onSelect, onEndTr
   const labelHeight = item.modelUrl ? 3.3 : 1.2
   const labelPos: [number, number, number] = [0, labelHeight, 0]
   const handleObjectPointerDown = useCallback((e: any) => {
-    e.stopPropagation()
+    try {
+      e.stopPropagation()
 
-    if (selectedSensorId && item.type === 'object') {
-      const point = e.point
-      if (point) {
-        const position: [number, number, number] = [
-          Number(point.x) || 0,
-          Number(point.y) || 0,
-          Number(point.z) || 0,
-        ]
-        window.requestAnimationFrame(() => onPlaceSensor(selectedSensorId, position))
-        return
+      if (selectedSensorId && item.type === 'object') {
+        const point = e.point
+        if (point) {
+          const position: [number, number, number] = [
+            Number.isFinite(point.x) ? point.x : 0,
+            Number.isFinite(point.y) ? point.y : 0,
+            Number.isFinite(point.z) ? point.z : 0,
+          ]
+          window.requestAnimationFrame(() => {
+            try {
+              onPlaceSensor(selectedSensorId, position)
+            } catch (error) {
+              console.error('Error posicionando sensor:', error)
+            }
+          })
+          return
+        }
       }
-    }
 
-    onSelect()
+      onSelect()
+    } catch (error) {
+      console.error('Error en clic de objeto 3D:', error)
+    }
   }, [item.type, onPlaceSensor, onSelect, selectedSensorId])
 
   return (
@@ -970,22 +981,31 @@ export default function DigitalTwin() {
   }, [])
 
   const placeSensorAtPoint = useCallback((sensorItemId: string, position: [number, number, number]) => {
-    const sensor = sceneItemsRef.current.find(item => item.id === sensorItemId)
+    try {
+      const safePosition: [number, number, number] = [
+        Number.isFinite(position[0]) ? position[0] : 0,
+        Number.isFinite(position[1]) ? position[1] : 0,
+        Number.isFinite(position[2]) ? position[2] : 0,
+      ]
+      const sensor = sceneItemsRef.current.find(item => item.id === sensorItemId && item.type === 'sensor')
+      if (!sensor) return
 
-    setSceneItems(currentItems => {
-      const next = currentItems.map(item =>
-        item.id === sensorItemId
-          ? { ...item, position: [...position] as [number, number, number] }
-          : item
+      setSceneItems(currentItems =>
+        currentItems.map(item =>
+          item.id === sensorItemId
+            ? { ...item, position: safePosition }
+            : item
+        )
       )
-      return next
-    })
 
-    selectObject(sensorItemId)
-    setMode('move')
+      selectObject(sensorItemId)
+      setMode('move')
 
-    if (sensor?.sensorId) {
-      sensorService.updatePosition(sensor.sensorId, { x: position[0], y: position[1], z: position[2] }).catch(() => {})
+      if (sensor.sensorId) {
+        sensorService.updatePosition(sensor.sensorId, { x: safePosition[0], y: safePosition[1], z: safePosition[2] }).catch(() => {})
+      }
+    } catch (error) {
+      console.error('Error aplicando posicion del sensor:', error)
     }
   }, [selectObject])
 
@@ -1331,37 +1351,46 @@ export default function DigitalTwin() {
 
         {/* Center - 3D Scene */}
         <div className="flex-1 bg-gray-50 relative">
-          <Canvas key={refreshKey} camera={{ position: viewMode === 'top' ? [0, 15, 0.01] : [8, 6, 8], fov: 45, near: 0.1, far: 100 }}
-            onPointerMissed={() => selectObject(null)}>
-            <Suspense fallback={<LoadingSpinner />}>
-              <ambientLight intensity={0.5} />
-              <directionalLight position={[10, 10, 10]} intensity={0.8} />
-              <directionalLight position={[-5, -5, -5]} intensity={0.3} />
-              <gridHelper args={[20, 20, '#888', '#444']} />
-              <axesHelper args={[3]} />
-              <OrbitControls ref={orbitRef} autoRotate={autoRotate} autoRotateSpeed={1.5}
-                enableDamping dampingFactor={0.1} enabled={mode === 'select'} />
+          <ErrorBoundary key={refreshKey} fallback={
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-sm text-gray-600">
+              <p className="font-medium text-gray-900">La escena 3D tuvo un problema.</p>
+              <button onClick={() => setRefreshKey(k => k + 1)} className="rounded border px-3 py-1.5 text-xs hover:bg-gray-50">
+                Recargar escena
+              </button>
+            </div>
+          }>
+            <Canvas key={refreshKey} camera={{ position: viewMode === 'top' ? [0, 15, 0.01] : [8, 6, 8], fov: 45, near: 0.1, far: 100 }}
+              onPointerMissed={() => { if (selectedItem?.type !== 'sensor') selectObject(null) }}>
+              <Suspense fallback={<LoadingSpinner />}>
+                <ambientLight intensity={0.5} />
+                <directionalLight position={[10, 10, 10]} intensity={0.8} />
+                <directionalLight position={[-5, -5, -5]} intensity={0.3} />
+                <gridHelper args={[20, 20, '#888', '#444']} />
+                <axesHelper args={[3]} />
+                <OrbitControls ref={orbitRef} autoRotate={autoRotate} autoRotateSpeed={1.5}
+                  enableDamping dampingFactor={0.1} enabled={mode === 'select'} />
 
-              {sceneItems.map(item => (
-                <SceneItem3D key={item.id} item={item} selected={selectedId === item.id}
-                  mode={mode}
-                  selectedSensorId={selectedItem?.type === 'sensor' ? selectedItem.id : null}
-                  onSelect={() => selectObject(item.id)}
-                  onEndTransform={handleEndTransform}
-                  onPlaceSensor={placeSensorAtPoint} />
-              ))}
+                {sceneItems.map(item => (
+                  <SceneItem3D key={item.id} item={item} selected={selectedId === item.id}
+                    mode={mode}
+                    selectedSensorId={selectedItem?.type === 'sensor' ? selectedItem.id : null}
+                    onSelect={() => selectObject(item.id)}
+                    onEndTransform={handleEndTransform}
+                    onPlaceSensor={placeSensorAtPoint} />
+                ))}
 
-              {sceneItems.length === 0 && (
-                <group>
-                  <mesh rotation={[0, 0, 0]}>
-                    <boxGeometry args={[1, 1, 1]} />
-                    <meshStandardMaterial color="#dc2626" wireframe />
-                  </mesh>
-                  <Text position={[0, 2, 0]} fontSize={0.4} color="#9ca3af" anchorX="center">Agrega objetos desde el panel izquierdo</Text>
-                </group>
-              )}
-            </Suspense>
-          </Canvas>
+                {sceneItems.length === 0 && (
+                  <group>
+                    <mesh rotation={[0, 0, 0]}>
+                      <boxGeometry args={[1, 1, 1]} />
+                      <meshStandardMaterial color="#dc2626" wireframe />
+                    </mesh>
+                    <Text position={[0, 2, 0]} fontSize={0.4} color="#9ca3af" anchorX="center">Agrega objetos desde el panel izquierdo</Text>
+                  </group>
+                )}
+              </Suspense>
+            </Canvas>
+          </ErrorBoundary>
 
           {/* Floating sensor tooltip */}
           {selectedItem?.type === 'sensor' && (
