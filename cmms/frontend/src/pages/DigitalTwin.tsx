@@ -715,7 +715,7 @@ function SceneItem3D({ item, selected, mode, selectedSensorId, onSelect, onEndTr
   const transformRootRef = useRef<Group>(null)
 
   const color = item.color || '#2563eb'
-  const showGizmo = selected && mode !== 'select' && item.type !== 'sensor'
+  const showGizmo = selected && mode !== 'select' && !item.locked
 
   const transformMode =
     mode === "move" ? "translate"
@@ -787,44 +787,50 @@ function SceneItem3D({ item, selected, mode, selectedSensorId, onSelect, onEndTr
   }, [item.type, onPlaceSensor, onSelect, selectedSensorId])
 
   return (
-    <group ref={transformRootRef}>
-      {item.modelUrl ? (
-        <Suspense fallback={<ModelLoadingIndicator />}>
-          <ModelRenderer url={item.modelUrl} ext={item.modelExt} file={item.modelFile}
-            color={color}
-            onPointerDown={handleObjectPointerDown} />
-        </Suspense>
-      ) : (
-        (() => {
-          const geo = item.type === 'sensor' ? 'sensor' : (item.modelType || '')
-          let geometry: React.ReactNode
-          switch (geo) {
-            case 'motor': geometry = <cylinderGeometry args={[0.6, 0.6, 1, 16]} />; break
-            case 'pump': geometry = <sphereGeometry args={[0.6, 32, 32]} />; break
-            case 'tank': geometry = <cylinderGeometry args={[0.7, 0.7, 1.3, 16]} />; break
-            case 'pipe': geometry = <cylinderGeometry args={[0.25, 0.25, 1.5, 12]} />; break
-            case 'panel': geometry = <boxGeometry args={[0.8, 1.2, 0.3]} />; break
-            case 'conveyor': geometry = <boxGeometry args={[1.6, 0.4, 0.6]} />; break
-            case 'machine': geometry = <boxGeometry args={[1.2, 1, 0.8]} />; break
-            case 'sensor':
-              return (
-                <SensorMarker
-                  item={item}
-                  color={color}
-                  selected={selected}
-                  onPointerDown={(e) => { e.stopPropagation(); onSelect() }}
-                />
-              )
-            default: geometry = <boxGeometry args={[1, 1, 1]} />
-          }
-          return (
-            <mesh onPointerDown={handleObjectPointerDown}>
-              {geometry}
-              <meshStandardMaterial color={color} />
-            </mesh>
-          )
-        })()
-      )}
+    <>
+      <group ref={transformRootRef}>
+        {item.modelUrl ? (
+          <Suspense fallback={<ModelLoadingIndicator />}>
+            <ModelRenderer url={item.modelUrl} ext={item.modelExt} file={item.modelFile}
+              color={color}
+              onPointerDown={handleObjectPointerDown} />
+          </Suspense>
+        ) : (
+          (() => {
+            const geo = item.type === 'sensor' ? 'sensor' : (item.modelType || '')
+            let geometry: React.ReactNode
+            switch (geo) {
+              case 'motor': geometry = <cylinderGeometry args={[0.6, 0.6, 1, 16]} />; break
+              case 'pump': geometry = <sphereGeometry args={[0.6, 32, 32]} />; break
+              case 'tank': geometry = <cylinderGeometry args={[0.7, 0.7, 1.3, 16]} />; break
+              case 'pipe': geometry = <cylinderGeometry args={[0.25, 0.25, 1.5, 12]} />; break
+              case 'panel': geometry = <boxGeometry args={[0.8, 1.2, 0.3]} />; break
+              case 'conveyor': geometry = <boxGeometry args={[1.6, 0.4, 0.6]} />; break
+              case 'machine': geometry = <boxGeometry args={[1.2, 1, 0.8]} />; break
+              case 'sensor':
+                return (
+                  <SensorMarker
+                    item={item}
+                    color={color}
+                    selected={selected}
+                    onPointerDown={(e) => { e.stopPropagation(); onSelect() }}
+                  />
+                )
+              default: geometry = <boxGeometry args={[1, 1, 1]} />
+            }
+            return (
+              <mesh onPointerDown={handleObjectPointerDown}>
+                {geometry}
+                <meshStandardMaterial color={color} />
+              </mesh>
+            )
+          })()
+        )}
+
+        <Html position={labelPos} center>
+          {selected && <div className="rounded border bg-primary-500/80 px-1.5 py-0.5 text-[10px] text-white shadow whitespace-nowrap">{item.name}</div>}
+        </Html>
+      </group>
 
       {showGizmo && transformRootRef.current && (
         <TransformControls
@@ -833,11 +839,7 @@ function SceneItem3D({ item, selected, mode, selectedSensorId, onSelect, onEndTr
           onMouseUp={() => syncTransform()}
         />
       )}
-
-      <Html position={labelPos} center>
-        {selected && <div className="rounded border bg-primary-500/80 px-1.5 py-0.5 text-[10px] text-white shadow whitespace-nowrap">{item.name}</div>}
-      </Html>
-    </group>
+    </>
   )
 }
 
@@ -1462,8 +1464,8 @@ export default function DigitalTwin() {
                 <directionalLight position={[-5, -5, -5]} intensity={0.3} />
                 <gridHelper args={[20, 20, '#888', '#444']} />
                 <axesHelper args={[3]} />
-                <OrbitControls ref={orbitRef} autoRotate={autoRotate} autoRotateSpeed={1.5}
-                  enableDamping dampingFactor={0.1} enabled={mode === 'select'} />
+                <OrbitControls ref={orbitRef} makeDefault autoRotate={autoRotate} autoRotateSpeed={1.5}
+                  enableDamping dampingFactor={0.1} enableRotate={viewMode === '3d'} />
 
                 {sceneItems.map(item => (
                   <SceneItem3D key={item.id} item={item} selected={selectedId === item.id}
