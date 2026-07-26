@@ -621,7 +621,7 @@ function SceneItem3D({ item, selected, mode, selectedSensorId, onSelect, onEndTr
   const transformRootRef = useRef<Group>(null)
 
   const color = item.color || '#2563eb'
-  const showGizmo = selected && mode !== 'select'
+  const showGizmo = selected && mode !== 'select' && item.type !== 'sensor'
 
   const transformMode =
     mode === "move" ? "translate"
