@@ -40,6 +40,7 @@ export const updateSensorSchema = z.object({
   warningMax: z.number().optional().nullable(),
   criticalMin: z.number().optional().nullable(),
   criticalMax: z.number().optional().nullable(),
+  assetId: z.string().uuid().optional().nullable(),
   isActive: z.boolean().optional(),
   samplingRate: z.number().int().positive().optional().nullable(),
   metadata: z.record(z.unknown()).optional().nullable(),

@@ -9,7 +9,7 @@ const ALLOWED_CREATE_FIELDS = [
 ];
 
 const ALLOWED_UPDATE_FIELDS = [
-  'name', 'type', 'mqttTopic', 'unit',
+  'name', 'type', 'mqttTopic', 'unit', 'assetId',
   'minThreshold', 'maxThreshold',
   'warningMin', 'warningMax', 'criticalMin', 'criticalMax',
   'isActive', 'samplingRate', 'metadata', 'position',
@@ -35,15 +35,46 @@ function stripProtected(data) {
   return result;
 }
 
+const THRESHOLD_KEYS = ['minThreshold', 'maxThreshold', 'warningMin', 'warningMax', 'criticalMin', 'criticalMax'];
+
 function normalizeNumericFields(data) {
-  const numericKeys = ['minThreshold', 'maxThreshold', 'warningMin', 'warningMax', 'criticalMin', 'criticalMax'];
-  for (const key of numericKeys) {
+  for (const key of THRESHOLD_KEYS) {
     if (data[key] !== undefined && data[key] !== null) {
       data[key] = Number(data[key]);
     }
   }
   if (data.samplingRate !== undefined) {
     data.samplingRate = Number(data.samplingRate) || 60;
+  }
+  return data;
+}
+
+function packThresholds(data) {
+  const hasAny = THRESHOLD_KEYS.some(k => k in data);
+  if (hasAny) {
+    const t = {};
+    for (const k of THRESHOLD_KEYS) {
+      if (data[k] !== undefined && data[k] !== null) {
+        t[k] = data[k];
+      }
+      delete data[k];
+    }
+    data.thresholds = Object.keys(t).length ? t : null;
+  }
+  return data;
+}
+
+function unpackThresholds(data) {
+  if (!data) return data;
+  if (Array.isArray(data)) {
+    return data.map(unpackThresholds);
+  }
+  if (data.thresholds && typeof data.thresholds === 'object') {
+    for (const k of THRESHOLD_KEYS) {
+      if (data.thresholds[k] !== undefined) {
+        data[k] = data.thresholds[k];
+      }
+    }
   }
   return data;
 }
@@ -60,6 +91,7 @@ export async function createSensor(body, companyId) {
   if (data.isActive === undefined) data.isActive = true;
 
   normalizeNumericFields(data);
+  packThresholds(data);
 
   const asset = await prisma.asset.findFirst({
     where: { id: data.assetId, companyId },
@@ -76,7 +108,7 @@ export async function createSensor(body, companyId) {
         _count: { select: { readings: true, alerts: true } },
       },
     });
-    return created;
+    return unpackThresholds(created);
   } catch (err) {
     throw Object.assign(new Error('Error al crear sensor'), { statusCode: 500, cause: err });
   }
@@ -90,6 +122,7 @@ export async function updateSensor(id, body, companyId) {
   if (!existing) throw Object.assign(new Error('Sensor no encontrado'), { statusCode: 404 });
 
   normalizeNumericFields(data);
+  packThresholds(data);
 
   try {
     const updated = await prisma.sensor.update({
@@ -100,7 +133,7 @@ export async function updateSensor(id, body, companyId) {
         alertConfigs: true,
       },
     });
-    return updated;
+    return unpackThresholds(updated);
   } catch (err) {
     throw Object.assign(new Error('Error al actualizar sensor'), { statusCode: 500, cause: err });
   }
@@ -115,7 +148,7 @@ export async function getSensorById(id, companyId) {
       alertConfigs: true,
     },
   });
-  return sensor;
+  return unpackThresholds(sensor);
 }
 
 export async function listSensors(query, companyId) {
@@ -150,7 +183,7 @@ export async function listSensors(query, companyId) {
     prisma.sensor.count({ where }),
   ]);
 
-  const enriched = data.map((s) => {
+  const enriched = unpackThresholds(data).map((s) => {
     const isOnline = s.lastValueAt && (Date.now() - new Date(s.lastValueAt).getTime()) < 300000;
     return { ...s, status: isOnline ? 'ONLINE' : 'OFFLINE' };
   });
