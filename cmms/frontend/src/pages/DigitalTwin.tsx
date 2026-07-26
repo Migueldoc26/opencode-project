@@ -523,29 +523,89 @@ function ModelLoadingIndicator() {
   )
 }
 
-function SensorMarker({ color, selected, onPointerDown }: {
+function getSensorGlyph(type?: string) {
+  switch (type) {
+    case 'TEMPERATURE': return 'T'
+    case 'PRESSURE': return 'P'
+    case 'VIBRATION': return 'V'
+    case 'HUMIDITY': return 'H'
+    case 'CURRENT': return 'A'
+    case 'VOLTAGE': return 'V'
+    case 'FLOW': return 'F'
+    case 'LEVEL': return 'L'
+    case 'GAS': return 'G'
+    default: return 'S'
+  }
+}
+
+function getSensorStatusColor(status?: SceneItem['status']) {
+  switch (status) {
+    case 'critical': return '#ef4444'
+    case 'warning': return '#f59e0b'
+    case 'disconnected': return '#6b7280'
+    default: return '#22c55e'
+  }
+}
+
+function SensorMarker({ item, color, selected, onPointerDown }: {
+  item: SceneItem
   color: string
   selected: boolean
   onPointerDown: (e: any) => void
 }) {
+  const [hovered, setHovered] = useState(false)
+  const statusColor = getSensorStatusColor(item.status)
+  const unit = item.dataSource?.unit || ''
+  const value = item.lastValue
+  const valueText = value !== undefined ? `${Number(value).toFixed(2)} ${unit}`.trim() : 'Sin lectura'
+  const glyph = getSensorGlyph(item.sensorType)
+
   return (
-    <group onPointerDown={onPointerDown}>
-      <mesh>
-        <sphereGeometry args={[0.28, 32, 32]} />
-        <meshStandardMaterial color={color} roughness={0.35} metalness={0.15} emissive={color} emissiveIntensity={0.15} />
-      </mesh>
+    <group
+      onPointerDown={onPointerDown}
+      onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
+      onPointerOut={(e) => { e.stopPropagation(); setHovered(false) }}
+    >
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.42, 0.025, 12, 48]} />
-        <meshStandardMaterial color={selected ? '#ef4444' : '#111827'} roughness={0.45} />
+        <torusGeometry args={[0.46, 0.018, 12, 56]} />
+        <meshStandardMaterial color={selected ? '#ef4444' : statusColor} roughness={0.35} emissive={statusColor} emissiveIntensity={0.12} />
       </mesh>
-      <mesh position={[0, 0.42, 0]}>
-        <coneGeometry args={[0.16, 0.28, 24]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.4} />
+      <mesh>
+        <sphereGeometry args={[0.3, 40, 40]} />
+        <meshStandardMaterial color={color} roughness={0.25} metalness={0.22} emissive={color} emissiveIntensity={hovered || selected ? 0.35 : 0.16} />
+      </mesh>
+      <mesh position={[0, 0.02, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.19, 32]} />
+        <meshStandardMaterial color="#ffffff" roughness={0.2} />
       </mesh>
       <mesh position={[0, -0.36, 0]}>
-        <cylinderGeometry args={[0.035, 0.035, 0.28, 12]} />
-        <meshStandardMaterial color="#374151" />
+        <cylinderGeometry args={[0.04, 0.08, 0.28, 18]} />
+        <meshStandardMaterial color="#1f2937" roughness={0.5} />
       </mesh>
+      <mesh position={[0, -0.55, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.18, 32]} />
+        <meshStandardMaterial color={statusColor} transparent opacity={0.22} />
+      </mesh>
+
+      <Html position={[0, 0.05, 0]} center distanceFactor={8}>
+        <div className="pointer-events-none flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-gray-900">
+          {glyph}
+        </div>
+      </Html>
+
+      {hovered && (
+        <Html position={[0, 0.9, 0]} center distanceFactor={7}>
+          <div className="pointer-events-none min-w-[170px] rounded-lg border border-gray-200 bg-white/95 px-3 py-2 text-left text-[11px] text-gray-700 shadow-xl backdrop-blur">
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-semibold text-gray-900">{item.name}</p>
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: statusColor }} />
+            </div>
+            <p className="mt-1 font-mono text-sm font-bold text-gray-900">{valueText}</p>
+            <p className="mt-1 text-[10px] text-gray-500">{item.sensorType || 'Sensor'}</p>
+            {item.dataSource?.topic && <p className="mt-1 max-w-[220px] truncate font-mono text-[10px] text-gray-400">{item.dataSource.topic}</p>}
+          </div>
+        </Html>
+      )}
     </group>
   )
 }
@@ -715,6 +775,7 @@ function SceneItem3D({ item, selected, mode, selectedSensorId, onSelect, onEndTr
             case 'sensor':
               return (
                 <SensorMarker
+                  item={item}
                   color={color}
                   selected={selected}
                   onPointerDown={(e) => { e.stopPropagation(); onSelect() }}
