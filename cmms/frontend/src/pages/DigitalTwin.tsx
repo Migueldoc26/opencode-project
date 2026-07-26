@@ -665,7 +665,7 @@ function SceneItem3D({ item, selected, mode, selectedSensorId, onSelect, onEndTr
   const handleObjectPointerDown = useCallback((e: any) => {
     e.stopPropagation()
 
-    if (selectedSensorId && item.type === 'object' && !selected) {
+    if (selectedSensorId && item.type === 'object') {
       const point = e.point
       if (point) {
         onPlaceSensor(selectedSensorId, [point.x, point.y, point.z])
@@ -674,7 +674,7 @@ function SceneItem3D({ item, selected, mode, selectedSensorId, onSelect, onEndTr
     }
 
     onSelect()
-  }, [item.type, onPlaceSensor, onSelect, selected, selectedSensorId])
+  }, [item.type, onPlaceSensor, onSelect, selectedSensorId])
 
   return (
     <group ref={transformRootRef}>
@@ -1360,6 +1360,12 @@ export default function DigitalTwin() {
           </Canvas>
 
           {/* Floating sensor tooltip */}
+          {selectedItem?.type === 'sensor' && (
+            <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-lg border border-primary-200 bg-white/95 px-3 py-2 text-xs text-gray-700 shadow-lg">
+              Haz clic sobre cualquier objeto para colocar este sensor.
+            </div>
+          )}
+
           {selectedItem?.type === 'sensor' && selectedItem.lastValue !== undefined && (
             <div className="absolute bottom-4 left-4 rounded-lg border bg-white/90 p-3 shadow-lg backdrop-blur-sm">
               <p className="text-xs font-medium text-gray-700">{selectedItem.name}</p>
