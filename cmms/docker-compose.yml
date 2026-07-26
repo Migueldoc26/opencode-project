@@ -60,6 +60,8 @@ services:
     container_name: cmms-backend
     ports:
       - "3000:3000"
+    volumes:
+      - backend_uploads:/app/uploads
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -129,6 +131,7 @@ volumes:
   emqx_log:
   minio_data:
   ai_models:
+  backend_uploads:
 
 networks:
   cmms-network:
