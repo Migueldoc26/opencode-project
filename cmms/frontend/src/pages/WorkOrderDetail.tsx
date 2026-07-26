@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Clock, User, Wrench, CheckCircle2, Circle, Package,
-  AlertTriangle, MessageSquare,
+  AlertTriangle, MessageSquare, X,
 } from 'lucide-react'
 import { workOrderService } from '../services/api'
 
@@ -20,39 +20,11 @@ interface SparePart {
   reference: string
 }
 
-interface TimelineEvent {
-  id: string
-  action: string
-  user: string
-  timestamp: string
-}
-
 export default function WorkOrderDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [order, setOrder] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
-
-  const activities: Activity[] = [
-    { id: '1', description: 'Inspect conveyor belt tension', completed: true },
-    { id: '2', description: 'Replace worn rollers', completed: true },
-    { id: '3', description: 'Lubricate chain drive', completed: false },
-    { id: '4', description: 'Test emergency stop', completed: false },
-    { id: '5', description: 'Document findings', completed: false },
-  ]
-
-  const spareParts: SparePart[] = [
-    { id: '1', name: 'Conveyor Roller 150mm', quantity: 4, reference: 'CR-150-SS' },
-    { id: '2', name: 'Bearing SKF 6205', quantity: 2, reference: 'SKF-6205-2Z' },
-    { id: '3', name: 'Lubricant Grease NLGI 2', quantity: 1, reference: 'LUBE-NLGI2-1KG' },
-  ]
-
-  const timeline: TimelineEvent[] = [
-    { id: '1', action: 'Work order created', user: 'John Doe', timestamp: '2024-06-10 08:00' },
-    { id: '2', action: 'Assigned to Sarah Miller', user: 'John Doe', timestamp: '2024-06-10 08:05' },
-    { id: '3', action: 'Started work', user: 'Sarah Miller', timestamp: '2024-06-11 09:00' },
-    { id: '4', action: 'Parts requested', user: 'Sarah Miller', timestamp: '2024-06-11 09:30' },
-  ]
 
   useEffect(() => {
     if (!id) return
@@ -81,6 +53,23 @@ export default function WorkOrderDetail() {
 
   if (!order) return null
 
+  const activities = Array.isArray(order.activities) ? order.activities as Activity[] : []
+  const spareParts = Array.isArray(order.spareParts)
+    ? (order.spareParts as any[]).map(part => ({
+        id: part.id,
+        name: part.sparePart?.name || part.name || 'Repuesto',
+        quantity: part.quantity || 0,
+        reference: part.sparePart?.code || part.reference || '-',
+      })) as SparePart[]
+    : []
+  const asset = order.asset as { id?: string; name?: string; code?: string } | undefined
+  const assignedTo = order.assignedTo as { name?: string; email?: string } | undefined
+  const createdBy = order.createdBy as { name?: string; email?: string } | undefined
+  const inspection = order.inspection as { id?: string; title?: string; status?: string } | undefined
+  const scheduledDate = order.scheduledDate as string | undefined
+  const startDate = order.startDate as string | undefined
+  const completionDate = order.completionDate as string | undefined
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -91,7 +80,7 @@ export default function WorkOrderDetail() {
           </button>
           <div>
             <h2 className="text-2xl font-bold text-gray-900">{order.title as string}</h2>
-            <p className="text-sm text-gray-500">ID: {order.id as string}</p>
+            <p className="text-sm text-gray-500">ID: {(order.code as string) || (order.id as string)}</p>
           </div>
           <span className={`badge ${
             order.status === 'COMPLETED' ? 'badge-success' :
@@ -125,30 +114,36 @@ export default function WorkOrderDetail() {
         {/* Main info */}
         <div className="card lg:col-span-2 space-y-6">
           <div>
-            <h3 className="card-title mb-3">Description</h3>
+            <h3 className="card-title mb-3">Descripción</h3>
             <p className="text-sm text-gray-600">{order.description as string || 'No description provided.'}</p>
           </div>
 
           <div>
-            <h3 className="card-title mb-3">Activities Checklist</h3>
+            <h3 className="card-title mb-3">Actividades reales</h3>
             <div className="space-y-2">
-              {activities.map(activity => (
-                <div key={activity.id} className="flex items-center gap-3 rounded-lg border p-3">
-                  {activity.completed ? (
-                    <CheckCircle2 className="h-5 w-5 text-success-500" />
-                  ) : (
-                    <Circle className="h-5 w-5 text-gray-300" />
-                  )}
-                  <span className={`text-sm ${activity.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
-                    {activity.description}
-                  </span>
+              {activities.length > 0 ? (
+                activities.map(activity => (
+                  <div key={activity.id} className="flex items-center gap-3 rounded-lg border p-3">
+                    {activity.completed ? (
+                      <CheckCircle2 className="h-5 w-5 text-success-500" />
+                    ) : (
+                      <Circle className="h-5 w-5 text-gray-300" />
+                    )}
+                    <span className={`text-sm ${activity.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                      {activity.description || 'Actividad sin descripción'}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-lg border border-dashed p-3 text-sm text-gray-500">
+                  Esta orden no tiene actividades registradas.
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
           <div>
-            <h3 className="card-title mb-3">Spare Parts Used</h3>
+            <h3 className="card-title mb-3">Repuestos reales utilizados</h3>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -159,18 +154,22 @@ export default function WorkOrderDetail() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {spareParts.map(part => (
-                    <tr key={part.id}>
-                      <td className="table-cell">
-                        <div className="flex items-center gap-2">
-                          <Package className="h-4 w-4 text-gray-400" />
-                          {part.name}
-                        </div>
-                      </td>
-                      <td className="table-cell text-gray-600">{part.reference}</td>
-                      <td className="table-cell text-gray-600">{part.quantity}</td>
-                    </tr>
-                  ))}
+                  {spareParts.length > 0 ? (
+                    spareParts.map(part => (
+                      <tr key={part.id}>
+                        <td className="table-cell">
+                          <div className="flex items-center gap-2">
+                            <Package className="h-4 w-4 text-gray-400" />
+                            {part.name}
+                          </div>
+                        </td>
+                        <td className="table-cell text-gray-600">{part.reference}</td>
+                        <td className="table-cell text-gray-600">{part.quantity}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr><td colSpan={3} className="table-cell text-center text-gray-500">Sin repuestos registrados</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -185,23 +184,23 @@ export default function WorkOrderDetail() {
               <div className="flex items-center gap-3">
                 <User className="h-4 w-4 text-gray-400" />
                 <div>
-                  <p className="text-gray-500">Assigned To</p>
-                  <p className="font-medium text-gray-900">{order.assignedTo as string || 'Unassigned'}</p>
+                  <p className="text-gray-500">Asignado a</p>
+                  <p className="font-medium text-gray-900">{assignedTo?.name || 'Sin asignar'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <Wrench className="h-4 w-4 text-gray-400" />
                 <div>
-                  <p className="text-gray-500">Asset</p>
-                  <p className="font-medium text-gray-900">{order.assetName as string || order.assetId as string || '-'}</p>
+                  <p className="text-gray-500">Activo</p>
+                  <p className="font-medium text-gray-900">{asset?.name || order.assetId as string || '-'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <Clock className="h-4 w-4 text-gray-400" />
                 <div>
-                  <p className="text-gray-500">Due Date</p>
+                  <p className="text-gray-500">Fecha programada</p>
                   <p className="font-medium text-gray-900">
-                    {order.dueDate ? new Date(order.dueDate as string).toLocaleDateString() : 'Not set'}
+                    {scheduledDate ? new Date(scheduledDate).toLocaleDateString() : 'No definida'}
                   </p>
                 </div>
               </div>
@@ -219,22 +218,31 @@ export default function WorkOrderDetail() {
           </div>
 
           <div className="card">
-            <h3 className="card-title mb-3">Timeline</h3>
+            <h3 className="card-title mb-3">Origen y trazabilidad</h3>
             <div className="space-y-4">
-              {timeline.map(event => (
-                <div key={event.id} className="relative flex gap-3 pl-4 before:absolute before:left-0 before:top-2 before:h-full before:w-0.5 before:bg-gray-200 last:before:hidden">
+              {[
+                { label: 'Creada', user: createdBy?.name, date: order.createdAt as string },
+                { label: 'Iniciada', user: assignedTo?.name, date: startDate },
+                { label: 'Completada', user: assignedTo?.name, date: completionDate },
+              ].filter(event => event.date).map(event => (
+                <div key={event.label} className="relative flex gap-3 pl-4 before:absolute before:left-0 before:top-2 before:h-full before:w-0.5 before:bg-gray-200 last:before:hidden">
                   <div className="absolute left-0 top-2 h-2 w-2 -translate-x-1/2 rounded-full bg-primary-600" />
                   <div>
-                    <p className="text-sm text-gray-900">{event.action}</p>
+                    <p className="text-sm text-gray-900">{event.label}</p>
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <User className="h-3 w-3" />
-                      {event.user}
+                      {event.user || '-'}
                       <Clock className="h-3 w-3" />
-                      {event.timestamp}
+                      {new Date(event.date as string).toLocaleString()}
                     </div>
                   </div>
                 </div>
               ))}
+              {inspection?.id && (
+                <div className="rounded-lg border border-primary-100 bg-primary-50 p-3 text-sm text-primary-800">
+                  Originada desde inspección: {inspection.title} ({inspection.status})
+                </div>
+              )}
             </div>
           </div>
         </div>

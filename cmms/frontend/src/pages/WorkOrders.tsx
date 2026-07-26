@@ -3,19 +3,41 @@ import { useNavigate } from 'react-router-dom'
 import {
   Plus, Columns, List, ChevronLeft, ChevronRight, X,
 } from 'lucide-react'
-import { workOrderService } from '../services/api'
+import { alertService, assetService, workOrderService } from '../services/api'
 
 interface WorkOrder {
   id: string
+  code?: string
   title: string
   description: string
   status: string
   priority: string
-  assetId: string
-  assetName: string
-  assignedTo: string
-  dueDate: string
+  assetId?: string
+  assetName?: string
+  asset?: { id: string; name: string; code?: string }
+  assignedTo?: string | { id: string; name: string }
+  scheduledDate?: string
+  dueDate?: string
   createdAt: string
+  metadata?: Record<string, unknown>
+}
+
+interface AssetOption {
+  id: string
+  name: string
+  code?: string
+  area?: { id: string; name: string }
+}
+
+interface ActiveAlert {
+  id: string
+  message: string
+  severity: string
+  value?: number
+  assetId?: string
+  asset?: { id: string; name: string; code?: string }
+  sensor?: { id: string; name: string; unit?: string }
+  createdAt?: string
 }
 
 const columns = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']
@@ -43,6 +65,8 @@ const priorityColors: Record<string, string> = {
 export default function WorkOrders() {
   const navigate = useNavigate()
   const [orders, setOrders] = useState<WorkOrder[]>([])
+  const [assets, setAssets] = useState<AssetOption[]>([])
+  const [activeAlerts, setActiveAlerts] = useState<ActiveAlert[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'kanban' | 'table'>('kanban')
   const [showModal, setShowModal] = useState(false)
@@ -53,11 +77,23 @@ export default function WorkOrders() {
 
   useEffect(() => {
     setLoading(true)
-    workOrderService.list()
-      .then(data => setOrders(data.items || data.data || []))
+    Promise.all([
+      workOrderService.list(),
+      assetService.list({ limit: 500 }),
+      alertService.getActive().catch(() => []),
+    ])
+      .then(([orderData, assetData, alertData]) => {
+        setOrders(orderData.items || orderData.data || [])
+        setAssets(assetData.items || assetData.data || [])
+        setActiveAlerts(Array.isArray(alertData) ? alertData : alertData.items || alertData.data || [])
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  const getAssetName = (order: WorkOrder) => order.asset?.name || order.assetName || order.assetId || '-'
+  const getAssignedName = (order: WorkOrder) => typeof order.assignedTo === 'object' ? order.assignedTo?.name : order.assignedTo
+  const getOrderDate = (order: WorkOrder) => order.scheduledDate || order.dueDate
 
   const handleStatusChange = async (id: string, status: string) => {
     try {
@@ -69,13 +105,32 @@ export default function WorkOrders() {
   const handleCreate = async () => {
     setError(null)
     try {
-      const created = await workOrderService.create(form)
+      const payload = {
+        title: form.title,
+        description: form.description,
+        priority: form.priority,
+        assetId: form.assetId || undefined,
+        scheduledDate: form.dueDate || undefined,
+      }
+      const created = await workOrderService.create(payload)
       setOrders(prev => [...prev, created])
       setShowModal(false)
       setForm({ title: '', description: '', priority: 'MEDIUM', assetId: '', assignedTo: '', dueDate: '' })
     } catch (err: unknown) {
       setError((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to create')
     }
+  }
+
+  const openFromAlert = (alert: ActiveAlert) => {
+    setForm({
+      title: `Revisar anomalía: ${alert.sensor?.name || 'sensor'}`,
+      description: `${alert.message}${alert.value !== undefined ? `\nValor registrado: ${alert.value}${alert.sensor?.unit || ''}` : ''}`,
+      priority: alert.severity === 'CRITICAL' ? 'HIGH' : 'MEDIUM',
+      assetId: alert.asset?.id || alert.assetId || '',
+      assignedTo: '',
+      dueDate: '',
+    })
+    setShowModal(true)
   }
 
   const getOrdersByStatus = (status: string) => orders.filter(o => o.status === status)
@@ -127,18 +182,18 @@ export default function WorkOrders() {
                     className="cursor-pointer rounded-lg border bg-white p-3 shadow-sm hover:shadow-md transition-shadow"
                   >
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="text-xs text-gray-500">{order.id}</span>
+                      <span className="text-xs text-gray-500">{order.code || order.id}</span>
                       <span className={`badge ${priorityColors[order.priority] || 'badge-gray'}`}>
                         {order.priority}
                       </span>
                     </div>
                     <h4 className="text-sm font-medium text-gray-900">{order.title}</h4>
                     <p className="mt-1 text-xs text-gray-500 line-clamp-2">{order.description}</p>
-                    {order.assetName && (
-                      <p className="mt-2 text-xs text-gray-400">Asset: {order.assetName}</p>
+                    {getAssetName(order) !== '-' && (
+                      <p className="mt-2 text-xs text-gray-400">Activo: {getAssetName(order)}</p>
                     )}
                     <div className="mt-2 flex items-center justify-between">
-                      <span className="text-xs text-gray-400">{order.assignedTo || 'Unassigned'}</span>
+                      <span className="text-xs text-gray-400">{getAssignedName(order) || 'Sin asignar'}</span>
                       {col === 'PENDING' && (
                         <button
                           onClick={e => { e.stopPropagation(); handleStatusChange(order.id, 'IN_PROGRESS') }}
@@ -169,12 +224,12 @@ export default function WorkOrders() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="table-header">ID</th>
-                  <th className="table-header">Title</th>
-                  <th className="table-header">Asset</th>
-                  <th className="table-header">Status</th>
-                  <th className="table-header">Priority</th>
-                  <th className="table-header">Assigned To</th>
-                  <th className="table-header">Due Date</th>
+                  <th className="table-header">Título</th>
+                  <th className="table-header">Activo</th>
+                  <th className="table-header">Estado</th>
+                  <th className="table-header">Prioridad</th>
+                  <th className="table-header">Asignado</th>
+                  <th className="table-header">Fecha</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -185,9 +240,9 @@ export default function WorkOrders() {
                 ) : (
                   orders.map(order => (
                     <tr key={order.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/work-orders/${order.id}`)}>
-                      <td className="table-cell font-medium">{order.id}</td>
+                      <td className="table-cell font-medium">{order.code || order.id}</td>
                       <td className="table-cell">{order.title}</td>
-                      <td className="table-cell text-gray-600">{order.assetName || '-'}</td>
+                      <td className="table-cell text-gray-600">{getAssetName(order)}</td>
                       <td className="table-cell">
                         <span className={`badge ${
                           order.status === 'COMPLETED' ? 'badge-success' :
@@ -199,13 +254,35 @@ export default function WorkOrders() {
                       <td className="table-cell">
                         <span className={`badge ${priorityColors[order.priority] || 'badge-gray'}`}>{order.priority}</span>
                       </td>
-                      <td className="table-cell text-gray-600">{order.assignedTo || '-'}</td>
-                      <td className="table-cell text-gray-600">{order.dueDate ? new Date(order.dueDate).toLocaleDateString() : '-'}</td>
+                      <td className="table-cell text-gray-600">{getAssignedName(order) || '-'}</td>
+                      <td className="table-cell text-gray-600">{getOrderDate(order) ? new Date(getOrderDate(order) as string).toLocaleDateString() : '-'}</td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {activeAlerts.length > 0 && (
+        <div className="card">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="card-title">Anomalías de sensores activas</h3>
+            <span className="badge-danger">{activeAlerts.length}</span>
+          </div>
+          <div className="space-y-2">
+            {activeAlerts.slice(0, 5).map(alert => (
+              <div key={alert.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-gray-900">{alert.message}</p>
+                  <p className="truncate text-xs text-gray-500">{alert.asset?.name || 'Activo no informado'}{alert.sensor?.name ? ` - ${alert.sensor.name}` : ''}</p>
+                </div>
+                <button onClick={() => openFromAlert(alert)} className="btn-primary whitespace-nowrap px-3 py-1.5 text-xs">
+                  Crear OT
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -240,8 +317,13 @@ export default function WorkOrders() {
                   </select>
                 </div>
                 <div>
-                  <label className="label">Asset ID</label>
-                  <input className="input-field" value={form.assetId} onChange={e => setForm(f => ({ ...f, assetId: e.target.value }))} />
+                  <label className="label">Activo</label>
+                  <select className="input-field" value={form.assetId} onChange={e => setForm(f => ({ ...f, assetId: e.target.value }))}>
+                    <option value="">Seleccionar activo</option>
+                    {assets.map(asset => (
+                      <option key={asset.id} value={asset.id}>{asset.name}{asset.code ? ` (${asset.code})` : ''}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="label">Assigned To</label>

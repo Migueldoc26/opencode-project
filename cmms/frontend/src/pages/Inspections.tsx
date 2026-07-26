@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import {
-  Search, Plus, X, CheckCircle2, AlertTriangle,
+  Search, Plus, X, CheckCircle2, AlertTriangle, XCircle,
   Camera, FileText, ChevronLeft, ChevronRight, ClipboardCheck,
 } from 'lucide-react'
-import { inspectionService } from '../services/api'
+import { assetService, inspectionService } from '../services/api'
 import ObservationCamera from '../components/common/ObservationCamera'
 
 interface Inspection {
@@ -17,6 +17,17 @@ interface Inspection {
   assignedTo: string
   checklistItems?: { name: string; passed: boolean }[]
   anomalies?: { description: string; severity: string }[]
+  area?: { id: string; name: string }
+  conductedBy?: { id: string; name: string }
+  _count?: { anomalies?: number; media?: number }
+}
+
+interface AssetOption {
+  id: string
+  name: string
+  code?: string
+  areaId?: string
+  area?: { id: string; name: string }
 }
 
 function ChecklistProgress({ items }: { items: { name: string; passed: boolean }[] }) {
@@ -36,6 +47,7 @@ function ChecklistProgress({ items }: { items: { name: string; passed: boolean }
 
 export default function Inspections() {
   const [inspections, setInspections] = useState<Inspection[]>([])
+  const [assets, setAssets] = useState<AssetOption[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -64,6 +76,12 @@ export default function Inspections() {
   useEffect(() => { loadInspections() }, [page])
 
   useEffect(() => {
+    assetService.list({ limit: 500 })
+      .then(data => setAssets(data.items || data.data || []))
+      .catch(() => setAssets([]))
+  }, [])
+
+  useEffect(() => {
     const timer = setTimeout(() => { if (page === 1) loadInspections(); else setPage(1) }, 300)
     return () => clearTimeout(timer)
   }, [search])
@@ -73,7 +91,14 @@ export default function Inspections() {
   const handleCreate = async () => {
     setError(null)
     try {
-      await inspectionService.create(form)
+      const asset = assets.find(a => a.id === form.assetId)
+      const areaId = asset?.area?.id || asset?.areaId
+      await inspectionService.create({
+        title: form.title,
+        scheduledDate: form.scheduledDate || undefined,
+        areaId,
+        metadata: form.assetId ? { assetId: form.assetId, assetName: asset?.name } : undefined,
+      })
       setShowModal(false)
       setForm({ title: '', assetId: '', scheduledDate: '', assignedTo: '' })
       loadInspections()
@@ -83,6 +108,10 @@ export default function Inspections() {
   }
 
   const handlePhotoUpload = async (blob: Blob) => {
+    if (!selectedInspection) {
+      setShowCamera(false)
+      return
+    }
     const formData = new FormData()
     formData.append('file', blob, `inspection_${Date.now()}.jpg`)
     try {
@@ -99,7 +128,7 @@ export default function Inspections() {
           <p className="mt-1 text-sm text-gray-500">Schedule and track equipment inspections</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowCamera(true)} className="btn-secondary flex items-center gap-2">
+          <button onClick={() => { setSelectedInspection(inspections[0] || null); setShowCamera(true) }} disabled={inspections.length === 0} className="btn-secondary flex items-center gap-2 disabled:opacity-50">
             <Camera className="h-4 w-4" />
             Camera
           </button>
@@ -147,9 +176,9 @@ export default function Inspections() {
                     }`}>{inspection.status}</span>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-4 text-xs text-gray-500">
-                    <span>Asset: {inspection.assetName || inspection.assetId}</span>
-                    <span>Assigned: {inspection.assignedTo}</span>
-                    <span>Scheduled: {new Date(inspection.scheduledDate).toLocaleDateString()}</span>
+                    <span>Área: {inspection.area?.name || inspection.assetName || inspection.assetId || '-'}</span>
+                    <span>Responsable: {inspection.conductedBy?.name || inspection.assignedTo || '-'}</span>
+                    <span>Programada: {inspection.scheduledDate ? new Date(inspection.scheduledDate).toLocaleDateString() : '-'}</span>
                     {inspection.completedDate && (
                       <span>Completed: {new Date(inspection.completedDate).toLocaleDateString()}</span>
                     )}
@@ -181,6 +210,17 @@ export default function Inspections() {
                   ))}
                 </div>
               )}
+              {!inspection.anomalies?.length && inspection._count?.anomalies ? (
+                <div className="mt-3 rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-xs text-warning-700">
+                  Esta inspección tiene {inspection._count.anomalies} anomalía(s) registrada(s).
+                </div>
+              ) : null}
+              <div className="mt-3 flex justify-end">
+                <button onClick={() => { setSelectedInspection(inspection); setShowCamera(true) }} className="btn-secondary flex items-center gap-2 px-3 py-1.5 text-xs">
+                  <Camera className="h-3.5 w-3.5" />
+                  Agregar evidencia
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -205,7 +245,7 @@ export default function Inspections() {
       {showCamera && (
         <div className="modal-overlay" onClick={() => setShowCamera(false)}>
           <div className="modal-content max-w-md" onClick={e => e.stopPropagation()}>
-            <ObservationCamera onUpload={handlePhotoUpload} onCapture={(blob) => console.log('Captured', blob)} />
+            <ObservationCamera onUpload={handlePhotoUpload} onCapture={() => {}} />
           </div>
         </div>
       )}
@@ -227,8 +267,13 @@ export default function Inspections() {
                 <input className="input-field" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
               </div>
               <div>
-                <label className="label">Asset ID</label>
-                <input className="input-field" value={form.assetId} onChange={e => setForm(f => ({ ...f, assetId: e.target.value }))} />
+                <label className="label">Activo relacionado</label>
+                <select className="input-field" value={form.assetId} onChange={e => setForm(f => ({ ...f, assetId: e.target.value }))}>
+                  <option value="">Seleccionar activo</option>
+                  {assets.map(asset => (
+                    <option key={asset.id} value={asset.id}>{asset.name}{asset.code ? ` (${asset.code})` : ''}</option>
+                  ))}
+                </select>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
