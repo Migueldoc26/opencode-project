@@ -165,9 +165,13 @@ function normalizeModelExt(
   return ""
 }
 
-function prepareModel(source: Object3D) {
+function prepareModel(source: Object3D, upAxis: 'y' | 'z' = 'y') {
   const container = new Group()
   const model = source.clone(true)
+
+  if (upAxis === 'z') {
+    model.rotation.x = -Math.PI / 2
+  }
 
   model.updateMatrixWorld(true)
 
@@ -182,18 +186,20 @@ function prepareModel(source: Object3D) {
       return
     }
 
+    mesh.geometry.computeBoundingBox()
+    if (!mesh.geometry.attributes.normal) {
+      mesh.geometry.computeVertexNormals()
+    }
+
     mesh.visible = true
     mesh.castShadow = true
     mesh.receiveShadow = true
     mesh.frustumCulled = false
 
-    if (!mesh.material) {
-      mesh.material = new MeshStandardMaterial({
-        color: 0x9ca3af,
-        roughness: 0.7,
-        metalness: 0.1,
-        side: DoubleSide
-      })
+    if (Array.isArray(mesh.material)) {
+      mesh.material = mesh.material.map(material => prepareMaterial(material))
+    } else {
+      mesh.material = prepareMaterial(mesh.material)
     }
   })
 
@@ -223,30 +229,80 @@ function prepareModel(source: Object3D) {
 
   const uniformScale = TARGET_MODEL_SIZE / maxDimension
 
-  model.scale.setScalar(uniformScale)
-  model.updateMatrixWorld(true)
+  model.position.x -= center.x
+  model.position.y -= box.min.y
+  model.position.z -= center.z
 
-  const scaledBox = new Box3().setFromObject(model)
-  const scaledCenter = scaledBox.getCenter(new Vector3())
-
-  model.position.x -= scaledCenter.x
-  model.position.z -= scaledCenter.z
-
-  model.updateMatrixWorld(true)
-
-  const finalBox = new Box3().setFromObject(model)
-  model.position.y -= finalBox.min.y
-
-  model.updateMatrixWorld(true)
+  container.scale.setScalar(uniformScale)
   container.add(model)
 
   console.log("Modelo preparado correctamente:", {
     meshCount,
     uniformScale,
-    finalSize: finalBox.getSize(new Vector3()).toArray()
+    finalSize: size.clone().multiplyScalar(uniformScale).toArray()
   })
 
   return container
+}
+
+function prepareMaterial(material?: Material) {
+  if (!material) {
+    return new MeshStandardMaterial({
+      color: 0x9ca3af,
+      roughness: 0.7,
+      metalness: 0.1,
+      side: DoubleSide,
+    })
+  }
+
+  const prepared = material.clone()
+  prepared.visible = true
+  prepared.side = DoubleSide
+
+  if ("transparent" in prepared) prepared.transparent = false
+  if ("opacity" in prepared) prepared.opacity = 1
+
+  return prepared
+}
+
+function serializeSceneItem(item: SceneItem) {
+  return {
+    id: item.id, type: item.type, name: item.name, sensorId: item.sensorId,
+    modelType: item.modelType, modelUrl: item.modelUrl, modelExt: item.modelExt, category: item.category,
+    position: item.position, rotation: item.rotation, scale: item.scale,
+    visible: item.visible, locked: item.locked, color: item.color,
+    sensorType: item.sensorType, dataSource: item.dataSource, thresholds: item.thresholds,
+    lastValue: item.lastValue, lastValueAt: item.lastValueAt, status: item.status,
+  }
+}
+
+async function uploadPendingModelFiles(twinId: string, items: SceneItem[]) {
+  const uploadedItems: SceneItem[] = []
+
+  for (const item of items) {
+    if (!item.modelFile) {
+      uploadedItems.push(item)
+      continue
+    }
+
+    const form = new FormData()
+    form.append('model', item.modelFile)
+    const twin = await digitalTwinService.uploadModel(twinId, form)
+    const modelUrl = twin?.modelUrl
+
+    if (!modelUrl) {
+      throw new Error(`El backend no devolvio URL para ${item.name}`)
+    }
+
+    if (item.modelUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(item.modelUrl)
+    }
+
+    const { modelFile: _modelFile, ...persistableItem } = item
+    uploadedItems.push({ ...persistableItem, modelUrl })
+  }
+
+  return uploadedItems
 }
 
 class ModelErrorBoundary extends React.Component<
@@ -327,38 +383,8 @@ function GLBModel({ file, url, onLoaded, onError, onPointerDown }: {
           throw new Error("La escena GLB no contiene mallas")
         }
 
-        const rawScene = gltf.scene.clone(true)
-
-        // PRUEBA 1: render raw scene without prepareModel
-        console.log("=== PRUEBA: render crudo ===")
-        rawScene.traverse((child: any) => {
-          if (child.isMesh) {
-            child.material = new MeshStandardMaterial({
-              color: 0xfbbf24, roughness: 0.7, metalness: 0.1,
-              side: DoubleSide, transparent: false, opacity: 1, visible: true
-            })
-            child.visible = true
-            child.frustumCulled = false
-          }
-        })
-
-        // CRITICO: forzar position/scale/rotation a identidad
-        rawScene.position.set(0, 0, 0)
-        rawScene.rotation.set(0, 0, 0)
-        rawScene.scale.set(1, 1, 1)
-        rawScene.updateMatrixWorld(true)
-
-        const rawBox = new Box3().setFromObject(rawScene)
-        console.log("Raw scene bbox:", {
-          empty: rawBox.isEmpty(),
-          min: rawBox.min.toArray(),
-          max: rawBox.max.toArray(),
-          size: rawBox.getSize(new Vector3()).toArray()
-        })
-        console.log("=== FIN PRUEBA ===")
-
-        // Usar rawScene directamente, sin prepareModel
-        setModel(rawScene)
+        const prepared = prepareModel(gltf.scene)
+        setModel(prepared)
         onLoaded?.(prepared)
       } catch (error: any) {
         if (cancelled) return
@@ -406,7 +432,7 @@ function OBJModel({ url, file, onLoaded, onError, onPointerDown }: {
           obj = await new OBJLoader().loadAsync(url)
         }
         if (cancelled) return
-        const prepared = prepareModel(obj)
+        const prepared = prepareModel(obj, 'z')
         setModel(prepared)
         onLoaded?.(prepared)
       } catch (err: any) {
@@ -466,7 +492,7 @@ function STLModel({ url, color, file, onLoaded, onError, onPointerDown }: {
       color: new Color(color), side: DoubleSide, roughness: 0.7, metalness: 0.1
     })
     const mesh = new Mesh(geo, material)
-    return prepareModel(mesh)
+    return prepareModel(mesh, 'z')
   }, [geometry, color])
 
   if (loadError) return <Html center><div className="rounded bg-red-600 px-3 py-2 text-xs text-white max-w-[300px] break-words">Error STL: {loadError}</div></Html>
@@ -834,6 +860,7 @@ export default function DigitalTwin() {
       lastValueAt: sensor.lastValueAt,
       status: normalizeSensorStatus(sensor.status),
     })
+    setMode('move')
   }, [addSceneItem, getSensorColor, normalizeSensorStatus])
 
   const deleteSelectedObject = useCallback(() => {
@@ -904,15 +931,12 @@ export default function DigitalTwin() {
       }
     }
 
-    const items = sceneItemsRef.current
-    const payload = { metadata: { sceneItems: items.map(i => ({
-      id: i.id, type: i.type, name: i.name, sensorId: i.sensorId,
-      modelType: i.modelType, modelUrl: i.modelUrl, modelExt: i.modelExt, category: i.category,
-      position: i.position, rotation: i.rotation, scale: i.scale,
-      visible: i.visible, locked: i.locked, color: i.color,
-      sensorType: i.sensorType, dataSource: i.dataSource, thresholds: i.thresholds,
-    })) } }
     try {
+      const items = await uploadPendingModelFiles(id, sceneItemsRef.current)
+      sceneItemsRef.current = items
+      setSceneItems(items)
+
+      const payload = { metadata: { sceneItems: items.map(serializeSceneItem) } }
       await digitalTwinService.update(id, payload)
       setSaveStatus('saved')
       clearTimeout(saveTimerRef.current)
