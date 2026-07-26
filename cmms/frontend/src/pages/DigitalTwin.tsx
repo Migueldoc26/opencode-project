@@ -305,6 +305,19 @@ async function uploadPendingModelFiles(twinId: string, items: SceneItem[]) {
   return uploadedItems
 }
 
+function getRenderableModelUrl(url: string) {
+  if (!url.startsWith('/uploads/')) return url
+
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return `http://localhost:3000${url}`
+  }
+
+  const apiBase = import.meta.env.VITE_API_URL
+  if (!apiBase || apiBase === '/api') return url
+
+  return `${apiBase.replace(/\/api\/?$/, '')}${url}`
+}
+
 class ModelErrorBoundary extends React.Component<
   { children: React.ReactNode; onError?: (error: Error) => void },
   { error: Error | null }
@@ -509,6 +522,33 @@ function ModelLoadingIndicator() {
   )
 }
 
+function SensorMarker({ color, selected, onPointerDown }: {
+  color: string
+  selected: boolean
+  onPointerDown: (e: any) => void
+}) {
+  return (
+    <group onPointerDown={onPointerDown}>
+      <mesh>
+        <sphereGeometry args={[0.28, 32, 32]} />
+        <meshStandardMaterial color={color} roughness={0.35} metalness={0.15} emissive={color} emissiveIntensity={0.15} />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.42, 0.025, 12, 48]} />
+        <meshStandardMaterial color={selected ? '#ef4444' : '#111827'} roughness={0.45} />
+      </mesh>
+      <mesh position={[0, 0.42, 0]}>
+        <coneGeometry args={[0.16, 0.28, 24]} />
+        <meshStandardMaterial color="#ffffff" roughness={0.4} />
+      </mesh>
+      <mesh position={[0, -0.36, 0]}>
+        <cylinderGeometry args={[0.035, 0.035, 0.28, 12]} />
+        <meshStandardMaterial color="#374151" />
+      </mesh>
+    </group>
+  )
+}
+
 function ModelRenderer({
   url,
   ext,
@@ -523,6 +563,7 @@ function ModelRenderer({
   onPointerDown: (e: any) => void
 }) {
   const normalizedExt = normalizeModelExt(ext, url)
+  const renderUrl = getRenderableModelUrl(url)
 
   console.log("ModelRenderer", { originalExt: ext, normalizedExt, hasFile: !!file, urlPrefix: url?.substring(0, 50) })
 
@@ -533,7 +574,7 @@ function ModelRenderer({
         <ModelErrorBoundary>
           <GLBModel
             file={file}
-            url={url}
+            url={renderUrl}
             onPointerDown={onPointerDown}
           />
         </ModelErrorBoundary>
@@ -544,7 +585,7 @@ function ModelRenderer({
       return (
         <ModelErrorBoundary>
           <OBJModel
-            url={url}
+            url={renderUrl}
             file={file}
             onPointerDown={onPointerDown}
           />
@@ -556,7 +597,7 @@ function ModelRenderer({
       return (
         <ModelErrorBoundary>
           <STLModel
-            url={url}
+            url={renderUrl}
             file={file}
             color={color || '#2563eb'}
             onPointerDown={onPointerDown}
@@ -569,10 +610,12 @@ function ModelRenderer({
   }
 }
 
-function SceneItem3D({ item, selected, mode, onSelect, onEndTransform }: {
+function SceneItem3D({ item, selected, mode, selectedSensorId, onSelect, onEndTransform, onPlaceSensor }: {
   item: SceneItem; selected: boolean; mode: ToolMode
+  selectedSensorId: string | null
   onSelect: () => void
   onEndTransform: (id: string, pos: [number, number, number], rot: [number, number, number], scl: [number, number, number]) => void
+  onPlaceSensor: (sensorItemId: string, position: [number, number, number]) => void
 }) {
   const transformRootRef = useRef<Group>(null)
 
@@ -619,6 +662,19 @@ function SceneItem3D({ item, selected, mode, onSelect, onEndTransform }: {
 
   const labelHeight = item.modelUrl ? 3.3 : 1.2
   const labelPos: [number, number, number] = [0, labelHeight, 0]
+  const handleObjectPointerDown = useCallback((e: any) => {
+    e.stopPropagation()
+
+    if (selectedSensorId && item.type === 'object' && !selected) {
+      const point = e.point
+      if (point) {
+        onPlaceSensor(selectedSensorId, [point.x, point.y, point.z])
+        return
+      }
+    }
+
+    onSelect()
+  }, [item.type, onPlaceSensor, onSelect, selected, selectedSensorId])
 
   return (
     <group ref={transformRootRef}>
@@ -626,7 +682,7 @@ function SceneItem3D({ item, selected, mode, onSelect, onEndTransform }: {
         <Suspense fallback={<ModelLoadingIndicator />}>
           <ModelRenderer url={item.modelUrl} ext={item.modelExt} file={item.modelFile}
             color={color}
-            onPointerDown={(e) => { e.stopPropagation(); onSelect() }} />
+            onPointerDown={handleObjectPointerDown} />
         </Suspense>
       ) : (
         (() => {
@@ -640,11 +696,18 @@ function SceneItem3D({ item, selected, mode, onSelect, onEndTransform }: {
             case 'panel': geometry = <boxGeometry args={[0.8, 1.2, 0.3]} />; break
             case 'conveyor': geometry = <boxGeometry args={[1.6, 0.4, 0.6]} />; break
             case 'machine': geometry = <boxGeometry args={[1.2, 1, 0.8]} />; break
-            case 'sensor': geometry = <boxGeometry args={[0.5, 0.5, 0.5]} />; break
+            case 'sensor':
+              return (
+                <SensorMarker
+                  color={color}
+                  selected={selected}
+                  onPointerDown={(e) => { e.stopPropagation(); onSelect() }}
+                />
+              )
             default: geometry = <boxGeometry args={[1, 1, 1]} />
           }
           return (
-            <mesh onPointerDown={(e) => { e.stopPropagation(); onSelect() }}>
+            <mesh onPointerDown={handleObjectPointerDown}>
               {geometry}
               <meshStandardMaterial color={color} />
             </mesh>
@@ -900,6 +963,27 @@ export default function DigitalTwin() {
       sensorService.updatePosition(item.sensorId, { x: pos[0], y: pos[1], z: pos[2] }).catch(() => {})
     }
   }, [])
+
+  const placeSensorAtPoint = useCallback((sensorItemId: string, position: [number, number, number]) => {
+    const sensor = sceneItemsRef.current.find(item => item.id === sensorItemId)
+
+    setSceneItems(currentItems => {
+      const next = currentItems.map(item =>
+        item.id === sensorItemId
+          ? { ...item, position: [...position] as [number, number, number] }
+          : item
+      )
+      pushHistory(next)
+      return next
+    })
+
+    selectObject(sensorItemId)
+    setMode('move')
+
+    if (sensor?.sensorId) {
+      sensorService.updatePosition(sensor.sensorId, { x: position[0], y: position[1], z: position[2] }).catch(() => {})
+    }
+  }, [pushHistory, selectObject])
 
   const twinIdRef = useRef<string | null>(localStorage.getItem('dt_twinId'))
 
@@ -1257,8 +1341,10 @@ export default function DigitalTwin() {
               {sceneItems.map(item => (
                 <SceneItem3D key={item.id} item={item} selected={selectedId === item.id}
                   mode={mode}
+                  selectedSensorId={selectedItem?.type === 'sensor' ? selectedItem.id : null}
                   onSelect={() => selectObject(item.id)}
-                  onEndTransform={handleEndTransform} />
+                  onEndTransform={handleEndTransform}
+                  onPlaceSensor={placeSensorAtPoint} />
               ))}
 
               {sceneItems.length === 0 && (
