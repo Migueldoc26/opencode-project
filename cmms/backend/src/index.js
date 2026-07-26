@@ -46,6 +46,10 @@ if (validationErrors.length > 0) {
 const app = express();
 const server = http.createServer(app);
 
+if (config.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 const corsOrigins = config.FRONTEND_URL ? config.FRONTEND_URL.split(',').map((s) => s.trim()) : [];
 if (corsOrigins.length === 0 && config.NODE_ENV === 'development') {
   corsOrigins.push('http://localhost:5173');
