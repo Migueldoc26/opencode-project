@@ -668,7 +668,12 @@ function SceneItem3D({ item, selected, mode, selectedSensorId, onSelect, onEndTr
     if (selectedSensorId && item.type === 'object') {
       const point = e.point
       if (point) {
-        onPlaceSensor(selectedSensorId, [point.x, point.y, point.z])
+        const position: [number, number, number] = [
+          Number(point.x) || 0,
+          Number(point.y) || 0,
+          Number(point.z) || 0,
+        ]
+        window.requestAnimationFrame(() => onPlaceSensor(selectedSensorId, position))
         return
       }
     }
@@ -973,7 +978,6 @@ export default function DigitalTwin() {
           ? { ...item, position: [...position] as [number, number, number] }
           : item
       )
-      pushHistory(next)
       return next
     })
 
@@ -983,7 +987,7 @@ export default function DigitalTwin() {
     if (sensor?.sensorId) {
       sensorService.updatePosition(sensor.sensorId, { x: position[0], y: position[1], z: position[2] }).catch(() => {})
     }
-  }, [pushHistory, selectObject])
+  }, [selectObject])
 
   const twinIdRef = useRef<string | null>(localStorage.getItem('dt_twinId'))
 
