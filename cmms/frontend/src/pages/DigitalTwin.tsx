@@ -525,16 +525,31 @@ function ModelLoadingIndicator() {
 
 function getSensorGlyph(type?: string) {
   switch (type) {
-    case 'TEMPERATURE': return 'T'
-    case 'PRESSURE': return 'P'
-    case 'VIBRATION': return 'V'
-    case 'HUMIDITY': return 'H'
+    case 'TEMPERATURE': return '°C'
+    case 'PRESSURE': return 'bar'
+    case 'VIBRATION': return 'Hz'
+    case 'HUMIDITY': return '%'
     case 'CURRENT': return 'A'
     case 'VOLTAGE': return 'V'
-    case 'FLOW': return 'F'
-    case 'LEVEL': return 'L'
-    case 'GAS': return 'G'
+    case 'FLOW': return 'm³'
+    case 'LEVEL': return 'LV'
+    case 'GAS': return 'ppm'
     default: return 'S'
+  }
+}
+
+function getSensorSymbol(type?: string) {
+  switch (type) {
+    case 'TEMPERATURE': return 'thermo'
+    case 'PRESSURE': return 'gauge'
+    case 'VIBRATION': return 'wave'
+    case 'HUMIDITY': return 'drop'
+    case 'CURRENT':
+    case 'VOLTAGE': return 'bolt'
+    case 'FLOW': return 'flow'
+    case 'LEVEL': return 'level'
+    case 'GAS': return 'gas'
+    default: return 'dot'
   }
 }
 
@@ -559,24 +574,29 @@ function SensorMarker({ item, color, selected, onPointerDown }: {
   const value = item.lastValue
   const valueText = value !== undefined ? `${Number(value).toFixed(2)} ${unit}`.trim() : 'Sin lectura'
   const glyph = getSensorGlyph(item.sensorType)
+  const symbol = getSensorSymbol(item.sensorType)
 
   return (
     <group
       onPointerDown={onPointerDown}
       onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
-      onPointerOut={(e) => { e.stopPropagation(); setHovered(false) }}
+      onPointerOut={(e) => { e.stopPropagation(); window.setTimeout(() => setHovered(false), 120) }}
     >
+      <mesh>
+        <sphereGeometry args={[0.78, 16, 16]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.46, 0.018, 12, 56]} />
+        <torusGeometry args={[0.5, 0.018, 12, 64]} />
         <meshStandardMaterial color={selected ? '#ef4444' : statusColor} roughness={0.35} emissive={statusColor} emissiveIntensity={0.12} />
       </mesh>
-      <mesh>
-        <sphereGeometry args={[0.3, 40, 40]} />
-        <meshStandardMaterial color={color} roughness={0.25} metalness={0.22} emissive={color} emissiveIntensity={hovered || selected ? 0.35 : 0.16} />
-      </mesh>
       <mesh position={[0, 0.02, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.19, 32]} />
-        <meshStandardMaterial color="#ffffff" roughness={0.2} />
+        <cylinderGeometry args={[0.34, 0.34, 0.09, 48]} />
+        <meshStandardMaterial color="#ffffff" roughness={0.18} metalness={0.08} />
+      </mesh>
+      <mesh position={[0, 0.04, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.31, 0.035, 12, 48]} />
+        <meshStandardMaterial color={color} roughness={0.28} metalness={0.15} emissive={color} emissiveIntensity={hovered || selected ? 0.3 : 0.12} />
       </mesh>
       <mesh position={[0, -0.36, 0]}>
         <cylinderGeometry args={[0.04, 0.08, 0.28, 18]} />
@@ -588,7 +608,21 @@ function SensorMarker({ item, color, selected, onPointerDown }: {
       </mesh>
 
       <Html position={[0, 0.05, 0]} center distanceFactor={8}>
-        <div className="pointer-events-none flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-gray-900">
+        <div className="pointer-events-none flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/90 text-gray-900 shadow-sm">
+          {symbol === 'thermo' && <Thermometer className="h-5 w-5" />}
+          {symbol === 'gauge' && <Gauge className="h-5 w-5" />}
+          {symbol === 'wave' && <Activity className="h-5 w-5" />}
+          {symbol === 'drop' && <Droplets className="h-5 w-5" />}
+          {symbol === 'bolt' && <Zap className="h-5 w-5" />}
+          {symbol === 'flow' && <Waves className="h-5 w-5" />}
+          {symbol === 'level' && <Radio className="h-5 w-5" />}
+          {symbol === 'gas' && <Wind className="h-5 w-5" />}
+          {symbol === 'dot' && <Activity className="h-5 w-5" />}
+        </div>
+      </Html>
+
+      <Html position={[0, 0.48, 0]} center distanceFactor={8}>
+        <div className="pointer-events-none rounded-full bg-gray-900/85 px-1.5 py-0.5 text-[9px] font-bold text-white shadow">
           {glyph}
         </div>
       </Html>
