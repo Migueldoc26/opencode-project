@@ -123,7 +123,8 @@ export async function listSensors(query, companyId) {
   const where = { asset: { companyId } };
   if (assetId) where.assetId = assetId;
   if (type) where.type = type;
-  if (isActive !== undefined) where.isActive = isActive === 'true';
+  if (isActive !== undefined && isActive !== 'all') where.isActive = isActive === 'true';
+  else where.isActive = true;
   if (search) {
     where.OR = [
       { name: { contains: search, mode: 'insensitive' } },
@@ -203,4 +204,23 @@ export async function deleteSensorPosition(id, companyId) {
     data: { position: null },
   });
   return updated;
+}
+
+export async function setManualValue(code, value, companyId) {
+  const sensor = await prisma.sensor.findFirst({
+    where: { code, asset: { companyId } },
+  });
+  if (!sensor) throw Object.assign(new Error('Sensor no encontrado'), { statusCode: 404 });
+
+  const [reading] = await Promise.all([
+    prisma.sensorReading.create({
+      data: { sensorId: sensor.id, value, timestamp: new Date() },
+    }),
+    prisma.sensor.update({
+      where: { id: sensor.id },
+      data: { lastValue: value, lastValueAt: new Date() },
+    }),
+  ]);
+
+  return { sensor, reading };
 }

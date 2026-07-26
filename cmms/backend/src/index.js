@@ -26,6 +26,7 @@ import kpiRoutes from './routes/kpi.routes.js';
 import plantRoutes from './routes/plant.routes.js';
 import digitalTwinRoutes from './routes/digitalTwin.routes.js';
 import userRoutes from './routes/user.routes.js';
+import auditLogRoutes from './routes/auditLog.routes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -128,6 +129,7 @@ app.use('/api/kpis', kpiRoutes);
 app.use('/api/plants', plantRoutes);
 app.use('/api/digital-twins', digitalTwinRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'Endpoint no encontrado' });

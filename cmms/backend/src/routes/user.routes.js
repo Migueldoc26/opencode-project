@@ -9,5 +9,9 @@ router.use(auth);
 router.use(authorize('ADMIN'));
 
 router.get('/', asyncHandler(userController.listUsers));
+router.post('/', asyncHandler(userController.createUser));
+router.put('/:id', asyncHandler(userController.updateUser));
+router.put('/:id/password', asyncHandler(userController.updateUserPassword));
+router.delete('/:id', asyncHandler(userController.removeUser));
 
 export default router;

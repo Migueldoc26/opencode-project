@@ -1,4 +1,5 @@
 import * as assetService from '../services/asset.service.js';
+import { createLog } from '../services/auditLog.service.js';
 
 export async function listAssets(req, res) {
   const { page, limit, search, status, areaId, plantId } = req.query;
@@ -20,16 +21,19 @@ export async function getAsset(req, res) {
 
 export async function createAsset(req, res) {
   const asset = await assetService.createAsset(req.body, req.user.companyId);
+  createLog({ action: 'CREATE', entity: 'ASSET', entityId: asset.id, description: 'Activo creado: ' + (asset.name || ''), userId: req.user.id, ipAddress: req.ip, metadata: { name: asset.name } }).catch(() => {})
   res.status(201).json(asset);
 }
 
 export async function updateAsset(req, res) {
   const asset = await assetService.updateAsset(req.params.id, req.body, req.user.companyId);
+  createLog({ action: 'UPDATE', entity: 'ASSET', entityId: asset.id, description: 'Activo actualizado: ' + (asset.name || ''), userId: req.user.id, ipAddress: req.ip, metadata: { name: asset.name } }).catch(() => {})
   res.json(asset);
 }
 
 export async function deleteAsset(req, res) {
   await assetService.deleteAsset(req.params.id, req.user.companyId);
+  createLog({ action: 'DELETE', entity: 'ASSET', entityId: req.params.id, description: 'Activo descomisionado', userId: req.user.id, ipAddress: req.ip }).catch(() => {})
   res.json({ message: 'Activo descomisionado exitosamente' });
 }
 

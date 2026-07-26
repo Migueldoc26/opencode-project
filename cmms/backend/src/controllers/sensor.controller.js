@@ -59,3 +59,46 @@ export async function deleteSensorPosition(req, res) {
   const updated = await sensorService.deleteSensorPosition(req.params.id, req.user.companyId);
   res.json({ success: true, data: { id: updated.id, position: null } });
 }
+
+export async function setManualValue(req, res) {
+  const { code, value } = req.body;
+  if (!code || value === undefined || value === null) {
+    return res.status(400).json({ success: false, error: { message: 'Se requiere code y value' } });
+  }
+  const parsed = parseFloat(value);
+  if (isNaN(parsed)) {
+    return res.status(400).json({ success: false, error: { message: 'value debe ser numérico' } });
+  }
+  const result = await sensorService.setManualValue(code, parsed, req.user.companyId);
+  res.json({ success: true, data: { sensor: { id: result.sensor.id, code: result.sensor.code, name: result.sensor.name, lastValue: result.sensor.lastValue }, reading: result.reading } });
+}
+
+export async function testMqttPublish(req, res) {
+  const { sensorId, value, topic, payload: customPayload } = req.body
+  if (!topic && !sensorId) {
+    return res.status(400).json({ success: false, error: { message: 'Se requiere sensorId o topic' } })
+  }
+
+  const rawPayload = customPayload || {
+    value: value || Math.round(Math.random() * 100),
+    timestamp: new Date().toISOString(),
+    sensorId: sensorId || 'test',
+  }
+  const payloadStr = typeof rawPayload === 'string' ? rawPayload : JSON.stringify(rawPayload)
+
+  let mqttTopic = topic
+  if (sensorId) {
+    const sensor = await sensorService.getSensorById(sensorId, req.user.companyId)
+    if (!sensor) {
+      return res.status(404).json({ success: false, error: { message: 'Sensor no encontrado' } })
+    }
+    mqttTopic = sensor.mqttTopic || ('cmms/sensors/' + sensor.code)
+  }
+
+  try {
+    await mqttService.publish(mqttTopic, payloadStr)
+    res.json({ success: true, message: 'Mensaje MQTT publicado', topic: mqttTopic, payload: payloadStr })
+  } catch (err) {
+    res.status(500).json({ success: false, error: { message: 'Error publicando MQTT: ' + (err.message || '') } })
+  }
+}

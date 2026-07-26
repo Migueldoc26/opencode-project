@@ -58,6 +58,12 @@ export default {
           900: '#450a0a',
         },
       },
+      dropShadow: {
+        glow: '0 0 8px rgba(220, 38, 38, 0.3)',
+      },
+      animation: {
+        'pulse-slow': 'pulse 3s ease-in-out infinite',
+      },
     },
   },
   plugins: [],

@@ -4,7 +4,7 @@ import {
   LayoutDashboard, CircuitBoard, Server, Activity, ClipboardList,
   Bell, SearchCheck, BarChart3, Settings, LogOut, Menu,
   ChevronLeft, ChevronRight, Wifi, WifiOff, User, Users,
-  Moon, Sun, Globe,
+  Moon, Sun, Globe, ScrollText, Radio,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useWebSocket } from '../context/WebSocketContext'
@@ -28,23 +28,25 @@ export default function Layout() {
       items: [
         { to: '/', icon: LayoutDashboard, label: t('nav.dashboard') },
         { to: '/digital-twin', icon: CircuitBoard, label: t('nav.digital-twin') },
-        { to: '/sensors', icon: Activity, label: t('nav.sensors') },
+        { to: '/alerts', icon: Bell, label: t('nav.alerts') },
+        { to: '/analytics', icon: BarChart3, label: t('nav.analytics') },
       ],
     },
     {
       label: t('nav.management'),
       items: [
         { to: '/assets', icon: Server, label: t('nav.assets') },
-        { to: '/work-orders', icon: ClipboardList, label: t('nav.work-orders') },
-        { to: '/alerts', icon: Bell, label: t('nav.alerts') },
+        { to: '/sensors', icon: Activity, label: t('nav.sensors') },
+        { to: '/mqtt-inspector', icon: Radio, label: 'MQTT Test' },
         { to: '/inspections', icon: SearchCheck, label: t('nav.inspections') },
-        { to: '/analytics', icon: BarChart3, label: t('nav.analytics') },
+        { to: '/work-orders', icon: ClipboardList, label: t('nav.work-orders') },
       ],
     },
     {
       label: t('nav.system'),
       items: [
         { to: '/users', icon: Users, label: t('nav.users') },
+        { to: '/activity-log', icon: ScrollText, label: 'Actividades' },
         { to: '/settings', icon: Settings, label: t('nav.settings') },
       ],
     },

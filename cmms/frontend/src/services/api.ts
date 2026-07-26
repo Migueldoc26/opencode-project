@@ -52,6 +52,7 @@ export const sensorService = {
   updatePosition: (id: string, position: { x: number; y: number; z: number }) => api.put(`/sensors/${id}/position`, position).then(r => r.data),
   removePosition: (id: string) => api.delete(`/sensors/${id}/position`).then(r => r.data),
   getAvailableTypes: () => api.get('/sensors/available-types').then(r => r.data),
+  testMqtt: (data: { sensorId?: string; value?: number; topic?: string; payload?: unknown }) => api.post('/sensors/test-mqtt', data).then(r => r.data),
 }
 
 export const workOrderService = {
@@ -106,7 +107,7 @@ export const digitalTwinService = {
   update: (id: string, data: Record<string, unknown>) => api.put(`/digital-twins/${id}`, data).then(r => r.data),
   remove: (id: string) => api.delete(`/digital-twins/${id}`).then(r => r.data),
   getStatus: (id: string) => api.get(`/digital-twins/${id}/status`).then(r => r.data),
-  uploadModel: (id: string, data: FormData) => api.post(`/digital-twins/${id}/model`, data, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data),
+  uploadModel: (id: string, data: FormData) => api.post(`/digital-twins/${id}/upload-model`, data, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data),
 }
 
 export const userService = {
@@ -116,6 +117,11 @@ export const userService = {
   update: (id: string, data: { name?: string; email?: string; role?: string; phone?: string; isActive?: boolean }) => api.put(`/users/${id}`, data).then(r => r.data),
   updatePassword: (id: string, password: string) => api.put(`/users/${id}/password`, { password }).then(r => r.data),
   remove: (id: string) => api.delete(`/users/${id}`).then(r => r.data),
+}
+
+export const auditLogService = {
+  list: (params?: Record<string, unknown>) => api.get('/audit-logs', { params }).then(r => r.data),
+  getById: (id: string) => api.get('/audit-logs/' + id).then(r => r.data),
 }
 
 export const settingsService = {

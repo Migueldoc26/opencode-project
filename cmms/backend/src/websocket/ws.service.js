@@ -4,6 +4,20 @@ import { config } from '../config/index.js';
 import logger from '../config/logger.js';
 import { setSocketIO } from '../services/notification.service.js';
 
+export const wsService = {
+  emitSensorReading(sensorId, reading) {
+    const io = getIO();
+    if (!io) return;
+    io.to(`sensor:${sensorId}`).emit('sensor:reading', reading);
+    io.emit('sensor:reading', { sensorId, ...reading });
+  },
+  emitRawMqtt(topic, payload) {
+    const io = getIO();
+    if (!io) return;
+    io.emit('mqtt:raw', { topic, payload, receivedAt: new Date().toISOString() });
+  },
+};
+
 let io = null;
 
 export function setupWebSocket(httpServer) {

@@ -1,9 +1,16 @@
 import prisma from './prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 
+async function findAccessibleTwin(id, companyId) {
+  const twin = await prisma.digitalTwin.findUnique({ where: { id }, include: { asset: true } });
+  if (!twin) throw new AppError('Gemelo digital no encontrado', 404);
+  if (twin.asset && twin.asset.companyId !== companyId) throw new AppError('Gemelo digital no encontrado', 404);
+  return twin;
+}
+
 export async function listDigitalTwins(companyId) {
   return prisma.digitalTwin.findMany({
-    where: { asset: { companyId } },
+    where: { OR: [{ asset: { companyId } }, { assetId: null }] },
     include: {
       asset: { select: { id: true, name: true, code: true } },
     },
@@ -12,8 +19,9 @@ export async function listDigitalTwins(companyId) {
 }
 
 export async function getDigitalTwin(id, companyId) {
-  const twin = await prisma.digitalTwin.findFirst({
-    where: { id, asset: { companyId } },
+  const twin = await findAccessibleTwin(id, companyId);
+  const full = await prisma.digitalTwin.findUnique({
+    where: { id },
     include: {
       asset: {
         include: {
@@ -24,8 +32,7 @@ export async function getDigitalTwin(id, companyId) {
       scenes: true,
     },
   });
-  if (!twin) throw new AppError('Gemelo digital no encontrado', 404);
-  return twin;
+  return full || twin;
 }
 
 export async function createDigitalTwin(body, companyId) {
@@ -40,8 +47,7 @@ export async function createDigitalTwin(body, companyId) {
 }
 
 export async function updateDigitalTwin(id, body, companyId) {
-  const twin = await prisma.digitalTwin.findFirst({ where: { id, asset: { companyId } } });
-  if (!twin) throw new AppError('Gemelo digital no encontrado', 404);
+  await findAccessibleTwin(id, companyId);
   return prisma.digitalTwin.update({
     where: { id },
     data: body,
@@ -49,14 +55,14 @@ export async function updateDigitalTwin(id, body, companyId) {
 }
 
 export async function deleteDigitalTwin(id, companyId) {
-  const twin = await prisma.digitalTwin.findFirst({ where: { id, asset: { companyId } } });
-  if (!twin) throw new AppError('Gemelo digital no encontrado', 404);
+  await findAccessibleTwin(id, companyId);
   await prisma.digitalTwin.delete({ where: { id } });
 }
 
 export async function getDigitalTwinStatus(id, companyId) {
-  const twin = await prisma.digitalTwin.findFirst({
-    where: { id, asset: { companyId } },
+  const twin = await findAccessibleTwin(id, companyId);
+  const full = await prisma.digitalTwin.findUnique({
+    where: { id },
     include: {
       asset: {
         include: {
@@ -68,13 +74,12 @@ export async function getDigitalTwinStatus(id, companyId) {
       },
     },
   });
-  if (!twin) throw new AppError('Gemelo digital no encontrado', 404);
 
   return {
     id: twin.id,
     name: twin.name,
-    assetStatus: twin.asset?.status || 'UNKNOWN',
-    sensors: (twin.asset?.sensors || []).map((s) => ({
+    assetStatus: full?.asset?.status || 'UNKNOWN',
+    sensors: (full?.asset?.sensors || []).map((s) => ({
       id: s.id,
       name: s.name,
       type: s.type,
@@ -87,9 +92,7 @@ export async function getDigitalTwinStatus(id, companyId) {
 }
 
 export async function uploadModel(id, filename, companyId) {
-  const twin = await prisma.digitalTwin.findFirst({ where: { id, asset: { companyId } } });
-  if (!twin) throw new AppError('Gemelo digital no encontrado', 404);
-
+  await findAccessibleTwin(id, companyId);
   return prisma.digitalTwin.update({
     where: { id },
     data: { modelUrl: `/uploads/${filename}` },

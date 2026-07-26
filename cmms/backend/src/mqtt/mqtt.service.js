@@ -30,12 +30,12 @@ class MqttService {
       connectTimeout: 10000,
     };
 
-    if (config.mqtt.username) options.username = config.mqtt.username;
-    if (config.mqtt.password) options.password = config.mqtt.password;
+    if (config.MQTT_USERNAME) options.username = config.MQTT_USERNAME;
+    if (config.MQTT_PASSWORD) options.password = config.MQTT_PASSWORD;
 
     let settled = false;
     return new Promise((resolve, reject) => {
-      this.client = mqtt.connect(config.mqtt.brokerUrl, options);
+      this.client = mqtt.connect(config.MQTT_BROKER_URL, options);
 
       const timeout = setTimeout(() => {
         if (!settled) { settled = true; reject(new Error('MQTT connection timeout')); }
@@ -47,8 +47,8 @@ class MqttService {
         settled = true;
         this._reconnecting = false;
         this.reconnectAttempts = 0;
-        this.brokers.set('default', { connected: true, url: config.mqtt.brokerUrl });
-        logger.info(`MQTT conectado a ${config.mqtt.brokerUrl}`);
+        this.brokers.set('default', { connected: true, url: config.MQTT_BROKER_URL });
+        logger.info('MQTT conectado a ' + config.MQTT_BROKER_URL);
 
         ['cmms/sensors/#', 'cmms/commands/#', 'cmms/alerts/#', 'controlmc/esp32/+/sensores'].forEach(
           (topic) => this.topics.set(topic, null)
@@ -114,7 +114,8 @@ class MqttService {
     for (const topic of this.topics.keys()) {
       if (this.client?.connected) {
         this.client.subscribe(topic, { qos: 1 }, (err) => {
-          if (err) logger.error(`Error suscribiendo a ${topic}: ${err.message}`);
+          if (err) logger.error('Error suscribiendo a ' + topic + ': ' + err.message);
+          else logger.info('MQTT suscrito a ' + topic);
         });
       }
     }
@@ -139,9 +140,17 @@ class MqttService {
   handleMessage(topic, payload) {
     try {
       const data = JSON.parse(payload.toString());
+
+      if (topic.startsWith('controlmc/esp32/') && topic.endsWith('/sensores')) {
+        const deviceId = topic.split('/')[2];
+        if (!deviceId) return;
+      }
+
+      wsService.emitRawMqtt(topic, data);
+
       this.processSensorData(topic, data);
     } catch (err) {
-      logger.error(`Error procesando mensaje MQTT [${topic}]: ${err.message}`);
+      logger.error('Error procesando mensaje MQTT [' + topic + ']: ' + err.message);
     }
   }
 
@@ -149,37 +158,64 @@ class MqttService {
     try {
       if (topic.startsWith('controlmc/esp32/') && topic.endsWith('/sensores')) {
         const parts = topic.split('/');
-        const sensorCode = parts[3];
-        if (!sensorCode || data.value === undefined) return;
+        const deviceId = parts[2];
+        if (!deviceId || data.device_id !== deviceId) return;
 
-        const sensor = await prisma.sensor.findUnique({
-          where: { code: sensorCode },
-          include: { alertConfigs: true },
-        });
-        if (!sensor || !sensor.isActive) {
-          logger.warn(`Sensor no encontrado o inactivo: ${sensorCode}`);
-          return;
+        const metricMap = [
+          { key: 'temperature_c', type: 'TEMPERATURE', unit: '°C', label: 'Temperatura' },
+          { key: 'humidity_percent', type: 'HUMIDITY', unit: '%', label: 'Humedad' },
+          { key: 'gas_raw', type: 'GAS', unit: 'raw', label: 'Gas' },
+          { key: 'distance_cm', type: 'LEVEL', unit: 'cm', label: 'Distancia' },
+        ]
+
+        for (const metric of metricMap) {
+          if (data[metric.key] === undefined) continue
+          const sensorCode = deviceId + '_' + metric.key
+          const value = parseFloat(data[metric.key])
+          if (isNaN(value)) continue
+
+          let sensor = await prisma.sensor.findUnique({ where: { code: sensorCode } })
+          if (!sensor) {
+            const asset = await prisma.asset.findFirst({
+              where: { code: { startsWith: 'ESP32' }, companyId: { not: null } },
+              orderBy: { createdAt: 'asc' },
+            })
+            sensor = await prisma.sensor.create({
+              data: {
+                code: sensorCode,
+                name: deviceId + ' - ' + metric.label,
+                type: metric.type,
+                unit: metric.unit,
+                isActive: true,
+                mqttTopic: topic,
+                assetId: asset?.id || null,
+              },
+            })
+            logger.info('Sensor auto-creado: ' + sensorCode + ' asset=' + (asset?.id || 'ninguno'))
+          } else if (!sensor.isActive) {
+            continue
+          }
+
+          const ts = data.ts ? new Date(data.ts) : new Date()
+          const reading = await prisma.sensorReading.create({
+            data: { sensorId: sensor.id, value, timestamp: ts },
+          })
+
+          await prisma.sensor.update({
+            where: { id: sensor.id },
+            data: { lastValue: value, lastValueAt: new Date() },
+          })
+
+          wsService.emitSensorReading(sensor.id, reading)
+
+          if (sensor.alertConfigs) {
+            for (const ac of sensor.alertConfigs) {
+              if (!ac.enabled) continue
+              await alertService.evaluateAlert(ac, value, sensor)
+            }
+          }
         }
-
-        const value = parseFloat(data.value);
-        if (isNaN(value)) return;
-
-        const reading = await prisma.sensorReading.create({
-          data: { sensorId: sensor.id, value, timestamp: data.timestamp ? new Date(data.timestamp) : new Date() },
-        });
-
-        await prisma.sensor.update({
-          where: { id: sensor.id },
-          data: { lastValue: value, lastValueAt: new Date() },
-        });
-
-        wsService.emitSensorReading(sensor.id, reading);
-
-        for (const ac of sensor.alertConfigs) {
-          if (!ac.enabled) continue;
-          await alertService.evaluateAlert(ac, value, sensor);
-        }
-        return;
+        return
       }
 
       if (data && typeof data === 'object' && data.value === undefined) {
@@ -253,6 +289,8 @@ class MqttService {
     if (!this.client?.connected) return false;
     const payload = typeof data === 'string' ? data : JSON.stringify(data);
     this.client.publish(topic, payload, { qos: 1, retain: false, ...options });
+    try { wsService.emitRawMqtt(topic, typeof data === 'string' ? JSON.parse(data) : data) } catch {}
+    try { this.processSensorData(topic, typeof data === 'string' ? JSON.parse(data) : data) } catch {}
     return true;
   }
 

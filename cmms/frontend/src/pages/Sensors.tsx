@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import {
   Thermometer, Gauge, Activity, Droplets, Zap, Wind,
-  Search, Edit, Trash2, Plus, X, Bell, SlidersHorizontal,
+  Search, Edit, Trash2, Plus, X, Bell, SlidersHorizontal, Wifi,
 } from 'lucide-react'
-import { sensorService, assetService } from '../services/api'
+import api, { sensorService, assetService } from '../services/api'
 
 interface SensorType {
   value: string
@@ -88,6 +88,10 @@ export default function Sensors() {
   const [showThresholdModal, setShowThresholdModal] = useState(false)
   const [thresholdForm, setThresholdForm] = useState({ minThreshold: '', maxThreshold: '' })
   const [error, setError] = useState<string | null>(null)
+  const [testSensor, setTestSensor] = useState<Sensor | null>(null)
+  const [testValue, setTestValue] = useState('')
+  const [testSending, setTestSending] = useState(false)
+  const [testResult, setTestResult] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -207,6 +211,37 @@ export default function Sensors() {
     } catch { /* ignore */ }
   }
 
+  const openTestModal = (sensor: Sensor) => {
+    setTestSensor(sensor)
+    setTestValue(String(sensor.value ?? ''))
+    setTestResult(null)
+  }
+
+  const handleTestMqtt = async () => {
+    if (!testSensor) return
+    const val = parseFloat(testValue)
+    if (isNaN(val)) { setTestResult('Ingresa un valor numérico válido'); return }
+    setTestSending(true)
+    setTestResult(null)
+    try {
+      await handleSetManualValue(testSensor.code, val)
+      const res = await sensorService.testMqtt({ sensorId: testSensor.id, value: val })
+      setSensors(prev => prev.map(s => s.id === testSensor.id ? { ...s, value: val } : s))
+      setTestResult('Enviado: ' + res.topic + ' = ' + val)
+      setTimeout(() => { setTestSensor(null); setTestResult(null) }, 1500)
+    } catch {
+      setTestResult('Error enviando. Verifica que el broker esté conectado.')
+    } finally {
+      setTestSending(false)
+    }
+  }
+
+  const handleSetManualValue = async (code: string, value: number) => {
+    try {
+      await api.post('/sensors/manual-value', { code, value }).then(r => r.data)
+    } catch {}
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -299,6 +334,9 @@ export default function Sensors() {
                   </button>
                   <button onClick={() => handleDelete(sensor.id)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-danger-600" title="Delete sensor">
                     <Trash2 className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => openTestModal(sensor)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-cyan-600" title="Test MQTT">
+                    <Wifi className="h-4 w-4" />
                   </button>
                 </div>
               </div>
@@ -429,6 +467,60 @@ export default function Sensors() {
               <div className="flex justify-end gap-3">
                 <button onClick={() => setShowThresholdModal(false)} className="btn-secondary">Cancel</button>
                 <button onClick={handleThresholdSave} className="btn-primary">Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Test MQTT Modal */}
+      {testSensor && (
+        <div className="modal-overlay" onClick={() => { setTestSensor(null); setTestResult(null) }}>
+          <div className="modal-content max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Probar Sensor</h3>
+              <button onClick={() => { setTestSensor(null); setTestResult(null) }} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mb-4 text-sm text-gray-500">
+              {testSensor.name} <span className="text-gray-400">({testSensor.type})</span>
+            </p>
+            <p className="mb-4 flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-gray-900">{testSensor.value}</span>
+              <span className="text-sm text-gray-500">{testSensor.unit}</span>
+              <span className="ml-auto text-xs text-gray-400">Valor actual</span>
+            </p>
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="label">Valor de prueba</label>
+                  <button onClick={() => setTestValue(String(testSensor?.value ?? ''))} className="text-xs text-gray-400 hover:text-primary-600">
+                    Reset
+                  </button>
+                </div>
+                <input
+                  type="number"
+                  step="any"
+                  className="input-field text-lg font-bold"
+                  value={testValue}
+                  onChange={e => setTestValue(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !testSending && handleTestMqtt()}
+                  placeholder="Ingresa un valor..."
+                  autoFocus
+                />
+              </div>
+              {testResult && (
+                <div className={`rounded-lg p-3 text-sm ${testResult.startsWith('Error') ? 'bg-danger-50 text-danger-700' : testResult.startsWith('Enviado') ? 'bg-success-50 text-success-700' : 'bg-warning-50 text-warning-700'}`}>
+                  {testResult}
+                </div>
+              )}
+              <div className="flex justify-end gap-3">
+                <button onClick={() => { setTestSensor(null); setTestResult(null) }} className="btn-secondary">Cancelar</button>
+                <button onClick={handleTestMqtt} disabled={testSending} className="btn-primary flex items-center gap-2">
+                  <Wifi className="h-4 w-4" />
+                  {testSending ? 'Enviando...' : 'Enviar'}
+                </button>
               </div>
             </div>
           </div>

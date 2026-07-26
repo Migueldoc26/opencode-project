@@ -3,7 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { WebSocketProvider } from './context/WebSocketContext'
 import { TranslationProvider } from './context/TranslationContext'
 import Layout from './components/Layout'
-import Login from './pages/Login'
+import LoginPage from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import DigitalTwin from './pages/DigitalTwin'
 import Assets from './pages/Assets'
@@ -16,6 +16,8 @@ import Inspections from './pages/Inspections'
 import Analytics from './pages/Analytics'
 import Settings from './pages/Settings'
 import Users from './pages/Users'
+import ActivityLog from './pages/ActivityLog'
+import MqttInspector from './pages/MqttInspector'
 import { type ReactNode } from 'react'
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -41,7 +43,7 @@ function PublicRoute({ children }: { children: ReactNode }) {
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
       <Route element={<ProtectedRoute><WebSocketProvider><Layout /></WebSocketProvider></ProtectedRoute>}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/digital-twin" element={<DigitalTwin />} />
@@ -54,6 +56,8 @@ function AppRoutes() {
         <Route path="/inspections" element={<Inspections />} />
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/users" element={<Users />} />
+        <Route path="/activity-log" element={<ActivityLog />} />
+        <Route path="/mqtt-inspector" element={<MqttInspector />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

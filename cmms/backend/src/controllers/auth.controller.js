@@ -1,8 +1,10 @@
 import * as authService from '../services/auth.service.js';
+import { createLog } from '../services/auditLog.service.js';
 
 export async function login(req, res) {
   const { email, password } = req.body;
   const result = await authService.login(email, password);
+  createLog({ action: 'LOGIN', entity: 'USER', entityId: result.user.id, description: 'Inicio de sesi\u00f3n', userId: result.user.id, ipAddress: req.ip }).catch(() => {})
   res.json({ token: result.token, user: result.user });
 }
 

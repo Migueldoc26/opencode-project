@@ -10,6 +10,7 @@ RUN npm install --omit=dev \
     && npx prisma generate
 
 COPY . .
+RUN mkdir -p /app/uploads
 
 EXPOSE 3000
 

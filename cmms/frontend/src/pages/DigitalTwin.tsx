@@ -166,20 +166,18 @@ function prepareModel(source: Object3D) {
       return
     }
 
-    mesh.geometry.computeBoundingBox()
-    if (!mesh.geometry.attributes.normal) {
-      mesh.geometry.computeVertexNormals()
-    }
-
     mesh.visible = true
     mesh.castShadow = true
     mesh.receiveShadow = true
     mesh.frustumCulled = false
 
-    if (Array.isArray(mesh.material)) {
-      mesh.material = mesh.material.map((material) => prepareMaterial(material))
-    } else {
-      mesh.material = prepareMaterial(mesh.material)
+    if (!mesh.material) {
+      mesh.material = new MeshStandardMaterial({
+        color: 0x9ca3af,
+        roughness: 0.7,
+        metalness: 0.1,
+        side: DoubleSide
+      })
     }
   })
 
@@ -209,96 +207,30 @@ function prepareModel(source: Object3D) {
 
   const uniformScale = TARGET_MODEL_SIZE / maxDimension
 
-  model.position.x -= center.x
-  model.position.y -= box.min.y
-  model.position.z -= center.z
+  model.scale.setScalar(uniformScale)
+  model.updateMatrixWorld(true)
 
-  container.scale.setScalar(uniformScale)
+  const scaledBox = new Box3().setFromObject(model)
+  const scaledCenter = scaledBox.getCenter(new Vector3())
+
+  model.position.x -= scaledCenter.x
+  model.position.z -= scaledCenter.z
+
+  model.updateMatrixWorld(true)
+
+  const finalBox = new Box3().setFromObject(model)
+  model.position.y -= finalBox.min.y
+
+  model.updateMatrixWorld(true)
   container.add(model)
 
   console.log("Modelo preparado correctamente:", {
     meshCount,
     uniformScale,
-    finalSize: size.multiplyScalar(uniformScale).toArray()
+    finalSize: finalBox.getSize(new Vector3()).toArray()
   })
 
   return container
-}
-
-function prepareMaterial(material?: Material) {
-  if (!material) {
-    return new MeshStandardMaterial({
-      color: 0x9ca3af,
-      roughness: 0.7,
-      metalness: 0.1,
-      side: DoubleSide,
-    })
-  }
-
-  const prepared = material.clone()
-  prepared.visible = true
-  prepared.side = DoubleSide
-
-  if ("transparent" in prepared) {
-    prepared.transparent = false
-  }
-
-  if ("opacity" in prepared) {
-    prepared.opacity = 1
-  }
-
-  return prepared
-}
-
-function getRenderableModelUrl(url: string) {
-  if (!url.startsWith('/uploads/')) return url
-
-  const apiBase = import.meta.env.VITE_API_URL
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return `http://localhost:3000${url}`
-  }
-  if (!apiBase) return url
-
-  return `${apiBase.replace(/\/api\/?$/, '')}${url}`
-}
-
-function serializeSceneItem(item: SceneItem) {
-  return {
-    id: item.id, type: item.type, name: item.name,
-    modelType: item.modelType, modelUrl: item.modelUrl, modelExt: item.modelExt, category: item.category,
-    position: item.position, rotation: item.rotation, scale: item.scale,
-    visible: item.visible, locked: item.locked, color: item.color,
-    sensorType: item.sensorType, dataSource: item.dataSource, thresholds: item.thresholds,
-  }
-}
-
-async function uploadPendingModelFiles(twinId: string, items: SceneItem[]) {
-  const uploadedItems: SceneItem[] = []
-
-  for (const item of items) {
-    if (!item.modelFile) {
-      uploadedItems.push(item)
-      continue
-    }
-
-    const form = new FormData()
-    form.append('model', item.modelFile)
-    const twin = await digitalTwinService.uploadModel(twinId, form)
-    const nextUrl = twin?.modelUrl
-
-    if (!nextUrl) {
-      throw new Error(`El backend no devolvio URL para ${item.name}`)
-    }
-
-    if (item.modelUrl?.startsWith('blob:')) {
-      URL.revokeObjectURL(item.modelUrl)
-    }
-
-    const { modelFile: _modelFile, ...persistableItem } = item
-    uploadedItems.push({ ...persistableItem, modelUrl: nextUrl })
-  }
-
-  return uploadedItems
 }
 
 class ModelErrorBoundary extends React.Component<
@@ -379,8 +311,38 @@ function GLBModel({ file, url, onLoaded, onError, onPointerDown }: {
           throw new Error("La escena GLB no contiene mallas")
         }
 
-        const prepared = prepareModel(gltf.scene)
-        setModel(prepared)
+        const rawScene = gltf.scene.clone(true)
+
+        // PRUEBA 1: render raw scene without prepareModel
+        console.log("=== PRUEBA: render crudo ===")
+        rawScene.traverse((child: any) => {
+          if (child.isMesh) {
+            child.material = new MeshStandardMaterial({
+              color: 0xfbbf24, roughness: 0.7, metalness: 0.1,
+              side: DoubleSide, transparent: false, opacity: 1, visible: true
+            })
+            child.visible = true
+            child.frustumCulled = false
+          }
+        })
+
+        // CRITICO: forzar position/scale/rotation a identidad
+        rawScene.position.set(0, 0, 0)
+        rawScene.rotation.set(0, 0, 0)
+        rawScene.scale.set(1, 1, 1)
+        rawScene.updateMatrixWorld(true)
+
+        const rawBox = new Box3().setFromObject(rawScene)
+        console.log("Raw scene bbox:", {
+          empty: rawBox.isEmpty(),
+          min: rawBox.min.toArray(),
+          max: rawBox.max.toArray(),
+          size: rawBox.getSize(new Vector3()).toArray()
+        })
+        console.log("=== FIN PRUEBA ===")
+
+        // Usar rawScene directamente, sin prepareModel
+        setModel(rawScene)
         onLoaded?.(prepared)
       } catch (error: any) {
         if (cancelled) return
@@ -519,7 +481,6 @@ function ModelRenderer({
   onPointerDown: (e: any) => void
 }) {
   const normalizedExt = normalizeModelExt(ext, url)
-  const renderUrl = getRenderableModelUrl(url)
 
   console.log("ModelRenderer", { originalExt: ext, normalizedExt, hasFile: !!file, urlPrefix: url?.substring(0, 50) })
 
@@ -530,7 +491,7 @@ function ModelRenderer({
         <ModelErrorBoundary>
           <GLBModel
             file={file}
-            url={renderUrl}
+            url={url}
             onPointerDown={onPointerDown}
           />
         </ModelErrorBoundary>
@@ -541,7 +502,7 @@ function ModelRenderer({
       return (
         <ModelErrorBoundary>
           <OBJModel
-            url={renderUrl}
+            url={url}
             file={file}
             onPointerDown={onPointerDown}
           />
@@ -553,7 +514,7 @@ function ModelRenderer({
       return (
         <ModelErrorBoundary>
           <STLModel
-            url={renderUrl}
+            url={url}
             file={file}
             color={color || '#2563eb'}
             onPointerDown={onPointerDown}
@@ -626,6 +587,12 @@ function SceneItem3D({ item, selected, mode, onSelect, onEndTransform }: {
 
   return (
     <group ref={transformRootRef}>
+      {/* Debug marker: always visible to confirm the group renders */}
+      <mesh position={[0, -0.5, 0]}>
+        <boxGeometry args={[0.2, 0.2, 0.2]} />
+        <meshStandardMaterial color="#00ff00" />
+      </mesh>
+
       {item.modelUrl ? (
         <Suspense fallback={<ModelLoadingIndicator />}>
           <ModelRenderer url={item.modelUrl} ext={item.modelExt} file={item.modelFile}
@@ -874,12 +841,15 @@ export default function DigitalTwin() {
       }
     }
 
+    const items = sceneItemsRef.current
+    const payload = { metadata: { sceneItems: items.map(i => ({
+      id: i.id, type: i.type, name: i.name,
+      modelType: i.modelType, modelUrl: i.modelUrl, modelExt: i.modelExt, category: i.category,
+      position: i.position, rotation: i.rotation, scale: i.scale,
+      visible: i.visible, locked: i.locked, color: i.color,
+      sensorType: i.sensorType, dataSource: i.dataSource, thresholds: i.thresholds,
+    })) } }
     try {
-      const items = await uploadPendingModelFiles(id, sceneItemsRef.current)
-      sceneItemsRef.current = items
-      setSceneItems(items)
-
-      const payload = { metadata: { sceneItems: items.map(serializeSceneItem) } }
       await digitalTwinService.update(id, payload)
       setSaveStatus('saved')
       clearTimeout(saveTimerRef.current)

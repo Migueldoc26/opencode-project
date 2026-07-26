@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import {
-  Search, Plus, CheckCircle2, XCircle, AlertTriangle,
+  Search, Plus, X, CheckCircle2, AlertTriangle,
   Camera, FileText, ChevronLeft, ChevronRight, ClipboardCheck,
 } from 'lucide-react'
 import { inspectionService } from '../services/api'
@@ -217,7 +217,7 @@ export default function Inspections() {
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Schedule Inspection</h3>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
-                <XCircle className="h-5 w-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
             {error && <div className="mb-4 rounded-lg bg-danger-50 p-3 text-sm text-danger-700">{error}</div>}

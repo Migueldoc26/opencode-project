@@ -78,6 +78,10 @@ router.put(
 
 router.delete('/:id/position', asyncHandler(sensorController.deleteSensorPosition));
 
+router.post('/manual-value', asyncHandler(sensorController.setManualValue));
+
+router.post('/test-mqtt', asyncHandler(sensorController.testMqttPublish));
+
 router.delete('/:id', asyncHandler(sensorController.deleteSensor));
 
 export default router;
