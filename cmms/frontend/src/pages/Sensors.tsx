@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Thermometer, Gauge, Activity, Droplets, Zap, Wind,
-  Search, Edit, Trash2, Plus, X, Bell, SlidersHorizontal, Wifi, Box,
+  Search, Edit, Trash2, Plus, X, Bell, SlidersHorizontal, Wifi, Box, Server,
 } from 'lucide-react'
 import api, { sensorService, assetService } from '../services/api'
 

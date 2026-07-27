@@ -93,6 +93,14 @@ export default function Inspections() {
     try {
       const asset = assets.find(a => a.id === form.assetId)
       const areaId = asset?.area?.id || asset?.areaId
+      if (!asset) {
+        setError('Selecciona un activo. La inspección debe quedar relacionada a un activo real.')
+        return
+      }
+      if (!areaId) {
+        setError('El activo seleccionado no tiene área asociada. Asigna el activo a un área antes de crear la inspección.')
+        return
+      }
       await inspectionService.create({
         title: form.title,
         scheduledDate: form.scheduledDate || undefined,

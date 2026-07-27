@@ -104,12 +104,16 @@ export default function WorkOrders() {
 
   const handleCreate = async () => {
     setError(null)
+    if (!form.assetId) {
+      setError('Selecciona un activo. Las OT deben quedar asociadas a un activo real.')
+      return
+    }
     try {
       const payload = {
         title: form.title,
         description: form.description,
         priority: form.priority,
-        assetId: form.assetId || undefined,
+        assetId: form.assetId,
         scheduledDate: form.dueDate || undefined,
       }
       const created = await workOrderService.create(payload)
