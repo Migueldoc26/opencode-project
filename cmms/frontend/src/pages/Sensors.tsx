@@ -5,6 +5,7 @@ import {
   Search, Edit, Trash2, Plus, X, Bell, SlidersHorizontal, Wifi, Box, Server,
 } from 'lucide-react'
 import api, { sensorService, assetService } from '../services/api'
+import { useTranslation } from '../context/TranslationContext'
 
 interface SensorType {
   value: string
@@ -20,6 +21,7 @@ interface Asset {
 
 interface Sensor {
   id: string
+  code?: string
   name: string
   type: string
   unit: string
@@ -78,6 +80,7 @@ const emptyForm: SensorForm = {
 
 export default function Sensors() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [sensors, setSensors] = useState<Sensor[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -173,7 +176,7 @@ export default function Sensors() {
       setSensors(data.items || data.data || [])
     } catch (err: unknown) {
       const apiError = (err as any)?.response?.data
-      setError(apiError?.error?.message || apiError?.message || 'Operation failed')
+      setError(apiError?.error?.message || apiError?.message || t('common.error'))
     }
   }
 
@@ -201,12 +204,12 @@ export default function Sensors() {
         maxThreshold: thresholdForm.maxThreshold ? parseFloat(thresholdForm.maxThreshold) : undefined,
       } : s))
     } catch {
-      setError('Failed to update thresholds')
+      setError(t('common.error'))
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this sensor?')) return
+    if (!confirm(t('sensors.delete-confirm'))) return
     try {
       await sensorService.remove(id)
       setSensors(prev => prev.filter(s => s.id !== id))
@@ -248,12 +251,12 @@ export default function Sensors() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Sensors</h2>
-          <p className="mt-1 text-sm text-gray-500">Monitor real-time sensor data across assets</p>
+          <h2 className="text-2xl font-bold text-gray-900">{t('sensors.title')}</h2>
+          <p className="mt-1 text-sm text-gray-500">{t('sensors.subtitle')}</p>
         </div>
         <button onClick={openCreate} className="btn-primary flex items-center gap-2">
           <Plus className="h-4 w-4" />
-          Add Sensor
+          {t('sensors.add')}
         </button>
       </div>
 
@@ -263,7 +266,7 @@ export default function Sensors() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Search sensors..."
+            placeholder={t('sensors.search')}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="input-field pl-10"
@@ -271,7 +274,7 @@ export default function Sensors() {
         </div>
         <input
           type="text"
-          placeholder="Filter by asset ID"
+          placeholder={t('sensors.filter-asset')}
           value={filterAsset}
           onChange={e => setFilterAsset(e.target.value)}
           className="input-field w-44"
@@ -279,7 +282,7 @@ export default function Sensors() {
         {(search || filterAsset) && (
           <button onClick={() => { setSearch(''); setFilterAsset('') }} className="btn-secondary flex items-center gap-2">
             <X className="h-4 w-4" />
-            Clear
+            {t('common.clear')}
           </button>
         )}
       </div>
@@ -291,7 +294,7 @@ export default function Sensors() {
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
           </div>
         ) : filteredSensors.length === 0 ? (
-          <div className="col-span-full py-12 text-center text-sm text-gray-500">No sensors found</div>
+          <div className="col-span-full py-12 text-center text-sm text-gray-500">{t('sensors.none')}</div>
         ) : (
           filteredSensors.map(sensor => {
             const IconComponent = typeIcons[sensor.type] || Activity
@@ -322,19 +325,19 @@ export default function Sensors() {
                   }`} />
                 </div>
                 <h3 className="text-sm font-medium text-gray-900">{sensor.name}</h3>
-                <p className="text-xs text-gray-500">{sensorTypes.find(t => t.value === sensor.type)?.label || sensor.type} on {sensor.assetName || sensor.assetId}</p>
+                <p className="text-xs text-gray-500">{sensorTypes.find(type => type.value === sensor.type)?.label || sensor.type} - {sensor.assetName || sensor.assetId}</p>
                 <div className="mt-3 flex items-baseline gap-1">
                   <span className="text-2xl font-bold text-gray-900">{sensor.value}</span>
                   <span className="text-sm text-gray-500">{sensor.unit}</span>
                 </div>
                 <div className="mt-3 flex items-center gap-2">
-                  <button onClick={() => openEdit(sensor)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-primary-600" title="Edit sensor">
+                  <button onClick={() => openEdit(sensor)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-primary-600" title={t('common.edit')}>
                     <Edit className="h-4 w-4" />
                   </button>
-                  <button onClick={() => openThresholdModal(sensor)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-primary-600" title="Set thresholds">
+                  <button onClick={() => openThresholdModal(sensor)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-primary-600" title={t('sensors.thresholds')}>
                     <SlidersHorizontal className="h-4 w-4" />
                   </button>
-                  <button onClick={() => handleDelete(sensor.id)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-danger-600" title="Delete sensor">
+                  <button onClick={() => handleDelete(sensor.id)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-danger-600" title={t('common.delete')}>
                     <Trash2 className="h-4 w-4" />
                   </button>
                   <button onClick={() => openTestModal(sensor)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-cyan-600" title="Test MQTT">
@@ -360,7 +363,7 @@ export default function Sensors() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">{editSensor ? 'Edit Sensor' : 'Create Sensor'}</h3>
+              <h3 className="text-lg font-semibold text-gray-900">{editSensor ? t('sensors.edit') : t('sensors.create')}</h3>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="h-5 w-5" />
               </button>
@@ -369,72 +372,72 @@ export default function Sensors() {
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <label className="label">Name *</label>
+                  <label className="label">{t('sensors.name')} *</label>
                   <input className="input-field" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
                 </div>
                 <div>
-                  <label className="label">Type</label>
+                  <label className="label">{t('sensors.type')}</label>
                   <select className="input-field" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, unit: sensorTypes.find(t => t.value === e.target.value)?.unit || '' }))}>
                     {sensorTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">Unit</label>
+                  <label className="label">{t('sensors.unit')}</label>
                   <input className="input-field" value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} placeholder="e.g. °C, bar, RPM" />
                 </div>
                 <div>
-                  <label className="label">Asset *</label>
+                  <label className="label">{t('sensors.asset')} *</label>
                   <select className="input-field" value={form.assetId} onChange={e => setForm(f => ({ ...f, assetId: e.target.value }))} required>
-                    <option value="">Select asset</option>
+                    <option value="">{t('sensors.select-asset')}</option>
                     {assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">MQTT Topic</label>
+                  <label className="label">{t('sensors.mqtt-topic')}</label>
                   <input className="input-field" value={form.mqttTopic} onChange={e => setForm(f => ({ ...f, mqttTopic: e.target.value }))} placeholder="e.g. sensors/temperature-01" />
                 </div>
                 <div>
-                  <label className="label">Sampling Rate (ms)</label>
+                  <label className="label">{t('sensors.sampling-rate')}</label>
                   <input type="number" className="input-field" value={form.samplingRate} onChange={e => setForm(f => ({ ...f, samplingRate: e.target.value }))} placeholder="e.g. 1000" />
                 </div>
                 <div className="flex items-center gap-2">
                   <input type="checkbox" id="isActive" className="h-4 w-4 rounded border-gray-300 text-primary-600" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} />
-                  <label htmlFor="isActive" className="label mb-0">Active</label>
+                  <label htmlFor="isActive" className="label mb-0">{t('sensors.active')}</label>
                 </div>
               </div>
 
               <hr className="border-gray-200" />
-              <p className="text-sm font-medium text-gray-700">Thresholds</p>
+              <p className="text-sm font-medium text-gray-700">{t('sensors.thresholds')}</p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="label">Min Threshold</label>
+                  <label className="label">{t('sensors.min-threshold')}</label>
                   <input type="number" className="input-field" value={form.minThreshold} onChange={e => setForm(f => ({ ...f, minThreshold: e.target.value }))} placeholder="Minimum safe value" />
                 </div>
                 <div>
-                  <label className="label">Max Threshold</label>
+                  <label className="label">{t('sensors.max-threshold')}</label>
                   <input type="number" className="input-field" value={form.maxThreshold} onChange={e => setForm(f => ({ ...f, maxThreshold: e.target.value }))} placeholder="Maximum safe value" />
                 </div>
                 <div>
-                  <label className="label">Warning Min</label>
+                  <label className="label">{t('sensors.warning-min')}</label>
                   <input type="number" className="input-field" value={form.warningMin} onChange={e => setForm(f => ({ ...f, warningMin: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="label">Warning Max</label>
+                  <label className="label">{t('sensors.warning-max')}</label>
                   <input type="number" className="input-field" value={form.warningMax} onChange={e => setForm(f => ({ ...f, warningMax: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="label">Critical Min</label>
+                  <label className="label">{t('sensors.critical-min')}</label>
                   <input type="number" className="input-field" value={form.criticalMin} onChange={e => setForm(f => ({ ...f, criticalMin: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="label">Critical Max</label>
+                  <label className="label">{t('sensors.critical-max')}</label>
                   <input type="number" className="input-field" value={form.criticalMax} onChange={e => setForm(f => ({ ...f, criticalMax: e.target.value }))} />
                 </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
-                <button onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>
-                <button onClick={handleSubmit} className="btn-primary">{editSensor ? 'Update' : 'Create'}</button>
+                <button onClick={() => setShowModal(false)} className="btn-secondary">{t('common.cancel')}</button>
+                <button onClick={handleSubmit} className="btn-primary">{editSensor ? t('common.update') : t('common.create')}</button>
               </div>
             </div>
           </div>
@@ -446,7 +449,7 @@ export default function Sensors() {
         <div className="modal-overlay" onClick={() => setShowThresholdModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Set Thresholds</h3>
+              <h3 className="text-lg font-semibold text-gray-900">{t('sensors.thresholds')}</h3>
               <button onClick={() => setShowThresholdModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="h-5 w-5" />
               </button>
@@ -455,7 +458,7 @@ export default function Sensors() {
             <p className="mb-4 text-sm text-gray-500">{editSensor.name} ({editSensor.type})</p>
             <div className="space-y-4">
               <div>
-                <label className="label">Min Threshold</label>
+                <label className="label">{t('sensors.min-threshold')}</label>
                 <input
                   type="number"
                   className="input-field"
@@ -465,7 +468,7 @@ export default function Sensors() {
                 />
               </div>
               <div>
-                <label className="label">Max Threshold</label>
+                <label className="label">{t('sensors.max-threshold')}</label>
                 <input
                   type="number"
                   className="input-field"
@@ -475,8 +478,8 @@ export default function Sensors() {
                 />
               </div>
               <div className="flex justify-end gap-3">
-                <button onClick={() => setShowThresholdModal(false)} className="btn-secondary">Cancel</button>
-                <button onClick={handleThresholdSave} className="btn-primary">Save</button>
+                <button onClick={() => setShowThresholdModal(false)} className="btn-secondary">{t('common.cancel')}</button>
+                <button onClick={handleThresholdSave} className="btn-primary">{t('common.save')}</button>
               </div>
             </div>
           </div>

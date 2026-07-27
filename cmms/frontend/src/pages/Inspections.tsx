@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { assetService, inspectionService } from '../services/api'
 import ObservationCamera from '../components/common/ObservationCamera'
+import { useTranslation } from '../context/TranslationContext'
 
 interface Inspection {
   id: string
@@ -46,6 +47,7 @@ function ChecklistProgress({ items }: { items: { name: string; passed: boolean }
 }
 
 export default function Inspections() {
+  const { t } = useTranslation()
   const [inspections, setInspections] = useState<Inspection[]>([])
   const [assets, setAssets] = useState<AssetOption[]>([])
   const [loading, setLoading] = useState(true)
@@ -94,11 +96,11 @@ export default function Inspections() {
       const asset = assets.find(a => a.id === form.assetId)
       const areaId = asset?.area?.id || asset?.areaId
       if (!asset) {
-        setError('Selecciona un activo. La inspección debe quedar relacionada a un activo real.')
+        setError(t('inspections.asset-required'))
         return
       }
       if (!areaId) {
-        setError('El activo seleccionado no tiene área asociada. Asigna el activo a un área antes de crear la inspección.')
+        setError(t('inspections.area-required'))
         return
       }
       await inspectionService.create({
@@ -111,7 +113,7 @@ export default function Inspections() {
       setForm({ title: '', assetId: '', scheduledDate: '', assignedTo: '' })
       loadInspections()
     } catch (err: unknown) {
-      setError((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to create')
+      setError((err as { response?: { data?: { message?: string } } })?.response?.data?.message || t('inspections.create-error'))
     }
   }
 
@@ -132,17 +134,17 @@ export default function Inspections() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Inspections</h2>
-          <p className="mt-1 text-sm text-gray-500">Schedule and track equipment inspections</p>
+          <h2 className="text-2xl font-bold text-gray-900">{t('inspections.title')}</h2>
+          <p className="mt-1 text-sm text-gray-500">{t('inspections.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => { setSelectedInspection(inspections[0] || null); setShowCamera(true) }} disabled={inspections.length === 0} className="btn-secondary flex items-center gap-2 disabled:opacity-50">
             <Camera className="h-4 w-4" />
-            Camera
+            {t('inspections.camera')}
           </button>
           <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2">
             <Plus className="h-4 w-4" />
-            New Inspection
+            {t('inspections.new')}
           </button>
         </div>
       </div>
@@ -152,7 +154,7 @@ export default function Inspections() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Search inspections..."
+            placeholder={t('inspections.search')}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="input-field pl-10"
@@ -168,7 +170,7 @@ export default function Inspections() {
         ) : inspections.length === 0 ? (
           <div className="card flex flex-col items-center justify-center py-12 text-gray-400">
             <ClipboardCheck className="mb-2 h-8 w-8" />
-            <p className="text-sm">No inspections found</p>
+            <p className="text-sm">{t('inspections.none')}</p>
           </div>
         ) : (
           inspections.map(inspection => (
@@ -184,11 +186,11 @@ export default function Inspections() {
                     }`}>{inspection.status}</span>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-4 text-xs text-gray-500">
-                    <span>Área: {inspection.area?.name || inspection.assetName || inspection.assetId || '-'}</span>
-                    <span>Responsable: {inspection.conductedBy?.name || inspection.assignedTo || '-'}</span>
-                    <span>Programada: {inspection.scheduledDate ? new Date(inspection.scheduledDate).toLocaleDateString() : '-'}</span>
+                    <span>{t('inspections.area')}: {inspection.area?.name || inspection.assetName || inspection.assetId || '-'}</span>
+                    <span>{t('inspections.assigned-to')}: {inspection.conductedBy?.name || inspection.assignedTo || '-'}</span>
+                    <span>{t('inspections.scheduled-date')}: {inspection.scheduledDate ? new Date(inspection.scheduledDate).toLocaleDateString() : '-'}</span>
                     {inspection.completedDate && (
-                      <span>Completed: {new Date(inspection.completedDate).toLocaleDateString()}</span>
+                      <span>{t('inspections.completed')}: {new Date(inspection.completedDate).toLocaleDateString()}</span>
                     )}
                   </div>
                 </div>
@@ -196,7 +198,7 @@ export default function Inspections() {
 
               {inspection.checklistItems && inspection.checklistItems.length > 0 && (
                 <div className="mt-3">
-                  <p className="mb-1 text-xs font-medium text-gray-500">Checklist Progress</p>
+                  <p className="mb-1 text-xs font-medium text-gray-500">{t('inspections.checklist-progress')}</p>
                   <ChecklistProgress items={inspection.checklistItems} />
                 </div>
               )}
@@ -205,7 +207,7 @@ export default function Inspections() {
                 <div className="mt-3 space-y-2">
                   <p className="text-xs font-medium text-gray-500 flex items-center gap-1">
                     <AlertTriangle className="h-3 w-3 text-danger-500" />
-                    Anomalies Found
+                    {t('inspections.anomalies')}
                   </p>
                   {inspection.anomalies.map((a, i) => (
                     <div key={i} className="flex items-center gap-2 rounded-lg bg-danger-50 px-3 py-2">
@@ -226,7 +228,7 @@ export default function Inspections() {
               <div className="mt-3 flex justify-end">
                 <button onClick={() => { setSelectedInspection(inspection); setShowCamera(true) }} className="btn-secondary flex items-center gap-2 px-3 py-1.5 text-xs">
                   <Camera className="h-3.5 w-3.5" />
-                  Agregar evidencia
+                  {t('inspections.evidence')}
                 </button>
               </div>
             </div>
@@ -237,7 +239,7 @@ export default function Inspections() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-500">Page {page} of {totalPages}</p>
+          <p className="text-sm text-gray-500">{page} / {totalPages}</p>
           <div className="flex items-center gap-2">
             <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="btn-secondary px-3 py-1.5 text-xs">
               <ChevronLeft className="h-4 w-4" />
@@ -263,7 +265,7 @@ export default function Inspections() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Schedule Inspection</h3>
+              <h3 className="text-lg font-semibold text-gray-900">{t('inspections.schedule')}</h3>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="h-5 w-5" />
               </button>
@@ -271,13 +273,13 @@ export default function Inspections() {
             {error && <div className="mb-4 rounded-lg bg-danger-50 p-3 text-sm text-danger-700">{error}</div>}
             <div className="space-y-4">
               <div>
-                <label className="label">Title *</label>
+                <label className="label">{t('inspections.title-field')} *</label>
                 <input className="input-field" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
               </div>
               <div>
-                <label className="label">Activo relacionado</label>
+                <label className="label">{t('inspections.related-asset')}</label>
                 <select className="input-field" value={form.assetId} onChange={e => setForm(f => ({ ...f, assetId: e.target.value }))}>
-                  <option value="">Seleccionar activo</option>
+                  <option value="">{t('sensors.select-asset')}</option>
                   {assets.map(asset => (
                     <option key={asset.id} value={asset.id}>{asset.name}{asset.code ? ` (${asset.code})` : ''}</option>
                   ))}
@@ -285,17 +287,17 @@ export default function Inspections() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="label">Scheduled Date</label>
+                  <label className="label">{t('inspections.scheduled-date')}</label>
                   <input type="date" className="input-field" value={form.scheduledDate} onChange={e => setForm(f => ({ ...f, scheduledDate: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="label">Assigned To</label>
+                  <label className="label">{t('inspections.assigned-to')}</label>
                   <input className="input-field" value={form.assignedTo} onChange={e => setForm(f => ({ ...f, assignedTo: e.target.value }))} />
                 </div>
               </div>
               <div className="flex justify-end gap-3 pt-4">
-                <button onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>
-                <button onClick={handleCreate} className="btn-primary">Schedule</button>
+                <button onClick={() => setShowModal(false)} className="btn-secondary">{t('common.cancel')}</button>
+                <button onClick={handleCreate} className="btn-primary">{t('inspections.schedule')}</button>
               </div>
             </div>
           </div>

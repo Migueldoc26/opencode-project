@@ -38,6 +38,7 @@ export const assetService = {
   update: (id: string, data: Record<string, unknown>) => api.put(`/assets/${id}`, data).then(r => r.data),
   remove: (id: string) => api.delete(`/assets/${id}`).then(r => r.data),
   getSensors: (id: string) => api.get(`/assets/${id}/sensors`).then(r => r.data),
+  assignSensor: (id: string, sensorId: string) => api.post(`/assets/${id}/sensors`, { sensorId }).then(r => r.data),
   getReadings: (id: string, params?: Record<string, unknown>) => api.get(`/assets/${id}/readings`, { params }).then(r => r.data),
   getMaintenance: (id: string) => api.get(`/assets/${id}/maintenance`).then(r => r.data),
 }

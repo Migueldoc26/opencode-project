@@ -2,10 +2,10 @@ import { useRef, useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Server, Activity, Thermometer, Gauge, Droplets,
-  Wrench, Clock, FileText, AlertTriangle, Cpu, Upload, Box,
+  Wrench, Clock, FileText, AlertTriangle, Cpu, Upload, Box, Link2,
 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { assetService, digitalTwinService } from '../services/api'
+import { assetService, digitalTwinService, sensorService } from '../services/api'
 
 const readingHistory = [
   { time: '00:00', temperature: 72, pressure: 4.1, vibration: 1.2 },
@@ -25,6 +25,8 @@ interface AssetSensor {
   lastValue?: number | string | null
   status?: string | null
   mqttTopic?: string | null
+  assetId?: string | null
+  assetName?: string | null
 }
 
 const getAssetSensors = (asset: Record<string, unknown>): AssetSensor[] => (
@@ -60,17 +62,31 @@ export default function AssetDetail() {
   const [loading, setLoading] = useState(true)
   const [modelUploading, setModelUploading] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
+  const [allSensors, setAllSensors] = useState<AssetSensor[]>([])
+  const [assignSensorId, setAssignSensorId] = useState('')
+  const [assigningSensor, setAssigningSensor] = useState(false)
+  const [assignError, setAssignError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'info' | 'sensors' | 'maintenance' | 'documents'>('info')
   const modelInputRef = useRef<HTMLInputElement>(null)
+
+  const reloadAsset = () => {
+    if (!id) return Promise.resolve()
+    return assetService.getById(id).then(setAsset)
+  }
 
   useEffect(() => {
     if (!id) return
     setLoading(true)
-    assetService.getById(id)
-      .then(setAsset)
+    reloadAsset()
       .catch(() => navigate('/assets'))
       .finally(() => setLoading(false))
   }, [id])
+
+  useEffect(() => {
+    sensorService.list({ limit: 500 })
+      .then(data => setAllSensors(data.items || data.data || []))
+      .catch(() => setAllSensors([]))
+  }, [])
 
   if (loading) {
     return (
@@ -84,6 +100,33 @@ export default function AssetDetail() {
 
   const assetSensors = getAssetSensors(asset)
   const assetTwin = asset.digitalTwin as { id?: string; name?: string; modelUrl?: string } | undefined
+  const availableSensors = allSensors.filter(sensor => sensor.id && sensor.assetId !== id)
+
+  const handleAssignSensor = async () => {
+    if (!id || !assignSensorId) return
+    setAssigningSensor(true)
+    setAssignError(null)
+    try {
+      await assetService.assignSensor(id, assignSensorId)
+      const assigned = allSensors.find(sensor => sensor.id === assignSensorId)
+      setAllSensors(prev => prev.map(sensor => (
+        sensor.id === assignSensorId
+          ? { ...sensor, assetId: id, assetName: asset.name as string }
+          : sensor
+      )))
+      setAssignSensorId('')
+      await reloadAsset()
+      if (!assigned) {
+        const data = await sensorService.list({ limit: 500 })
+        setAllSensors(data.items || data.data || [])
+      }
+    } catch (err: unknown) {
+      const apiError = (err as any)?.response?.data
+      setAssignError(apiError?.error?.message || apiError?.message || 'No se pudo asignar el sensor al activo.')
+    } finally {
+      setAssigningSensor(false)
+    }
+  }
 
   const handleModelUpload = async (file: File) => {
     if (!id) return
@@ -249,6 +292,38 @@ export default function AssetDetail() {
               </div>
             </div>
             <div className="space-y-3">
+              <div className="rounded-lg border bg-gray-50 p-3">
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-900">
+                  <Link2 className="h-4 w-4 text-primary-600" />
+                  Asignar sensor existente a este activo
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <select
+                    className="input-field min-w-0 flex-1"
+                    value={assignSensorId}
+                    onChange={e => setAssignSensorId(e.target.value)}
+                  >
+                    <option value="">Seleccionar sensor</option>
+                    {availableSensors.map(sensor => (
+                      <option key={sensor.id} value={sensor.id}>
+                        {sensor.name || 'Sensor sin nombre'}{sensor.assetName ? ` - actual: ${sensor.assetName}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleAssignSensor}
+                    disabled={!assignSensorId || assigningSensor}
+                    className="btn-primary px-3 py-2 text-xs disabled:opacity-50"
+                  >
+                    {assigningSensor ? 'Asignando...' : 'Asignar'}
+                  </button>
+                </div>
+                {assignError && <p className="mt-2 text-xs text-danger-600">{assignError}</p>}
+                {availableSensors.length === 0 && (
+                  <p className="mt-2 text-xs text-gray-500">No hay sensores libres o reasignables para mostrar.</p>
+                )}
+              </div>
+
               {assetSensors.length > 0 ? (
                 assetSensors.map(sensor => {
                   const SensorIcon = getSensorIcon(sensor.type)

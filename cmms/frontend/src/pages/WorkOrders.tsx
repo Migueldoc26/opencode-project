@@ -4,6 +4,7 @@ import {
   Plus, Columns, List, ChevronLeft, ChevronRight, X,
 } from 'lucide-react'
 import { alertService, assetService, workOrderService } from '../services/api'
+import { useTranslation } from '../context/TranslationContext'
 
 interface WorkOrder {
   id: string
@@ -42,13 +43,6 @@ interface ActiveAlert {
 
 const columns = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']
 
-const columnLabels: Record<string, string> = {
-  PENDING: 'Pending',
-  IN_PROGRESS: 'In Progress',
-  COMPLETED: 'Completed',
-  CANCELLED: 'Cancelled',
-}
-
 const columnColors: Record<string, string> = {
   PENDING: 'bg-gray-100 border-gray-300',
   IN_PROGRESS: 'bg-warning-50 border-warning-300',
@@ -64,6 +58,7 @@ const priorityColors: Record<string, string> = {
 
 export default function WorkOrders() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [orders, setOrders] = useState<WorkOrder[]>([])
   const [assets, setAssets] = useState<AssetOption[]>([])
   const [activeAlerts, setActiveAlerts] = useState<ActiveAlert[]>([])
@@ -105,7 +100,7 @@ export default function WorkOrders() {
   const handleCreate = async () => {
     setError(null)
     if (!form.assetId) {
-      setError('Selecciona un activo. Las OT deben quedar asociadas a un activo real.')
+      setError(t('workorders.asset-required'))
       return
     }
     try {
@@ -121,7 +116,7 @@ export default function WorkOrders() {
       setShowModal(false)
       setForm({ title: '', description: '', priority: 'MEDIUM', assetId: '', assignedTo: '', dueDate: '' })
     } catch (err: unknown) {
-      setError((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to create')
+      setError((err as { response?: { data?: { message?: string } } })?.response?.data?.message || t('workorders.create-error'))
     }
   }
 
@@ -143,8 +138,8 @@ export default function WorkOrders() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Work Orders</h2>
-          <p className="mt-1 text-sm text-gray-500">Manage and track maintenance work</p>
+          <h2 className="text-2xl font-bold text-gray-900">{t('workorders.title')}</h2>
+          <p className="mt-1 text-sm text-gray-500">{t('workorders.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border bg-white">
@@ -163,7 +158,7 @@ export default function WorkOrders() {
           </div>
           <button onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-2">
             <Plus className="h-4 w-4" />
-            New Order
+            {t('workorders.new')}
           </button>
         </div>
       </div>
@@ -173,7 +168,7 @@ export default function WorkOrders() {
           {columns.map(col => (
             <div key={col} className={`rounded-xl border p-4 ${columnColors[col]}`}>
               <h3 className="mb-3 text-sm font-semibold text-gray-900">
-                {columnLabels[col]}
+                {t(`status.${col}`)}
                 <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-xs text-gray-500">
                   {getOrdersByStatus(col).length}
                 </span>
@@ -188,7 +183,7 @@ export default function WorkOrders() {
                     <div className="mb-2 flex items-center justify-between">
                       <span className="text-xs text-gray-500">{order.code || order.id}</span>
                       <span className={`badge ${priorityColors[order.priority] || 'badge-gray'}`}>
-                        {order.priority}
+                        {t(`priority.${order.priority}`)}
                       </span>
                     </div>
                     <h4 className="text-sm font-medium text-gray-900">{order.title}</h4>
@@ -203,7 +198,7 @@ export default function WorkOrders() {
                           onClick={e => { e.stopPropagation(); handleStatusChange(order.id, 'IN_PROGRESS') }}
                           className="btn-primary py-1 px-2 text-xs"
                         >
-                          Start
+                          {t('workorders.start')}
                         </button>
                       )}
                       {col === 'IN_PROGRESS' && (
@@ -211,7 +206,7 @@ export default function WorkOrders() {
                           onClick={e => { e.stopPropagation(); handleStatusChange(order.id, 'COMPLETED') }}
                           className="btn-success py-1 px-2 text-xs"
                         >
-                          Complete
+                          {t('workorders.complete')}
                         </button>
                       )}
                     </div>
@@ -238,9 +233,9 @@ export default function WorkOrders() {
               </thead>
               <tbody className="divide-y">
                 {loading ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-sm text-gray-500">Loading...</td></tr>
+                  <tr><td colSpan={7} className="p-8 text-center text-sm text-gray-500">{t('common.loading')}</td></tr>
                 ) : orders.length === 0 ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-sm text-gray-500">No work orders</td></tr>
+                  <tr><td colSpan={7} className="p-8 text-center text-sm text-gray-500">{t('workorders.none')}</td></tr>
                 ) : (
                   orders.map(order => (
                     <tr key={order.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/work-orders/${order.id}`)}>
@@ -253,10 +248,10 @@ export default function WorkOrders() {
                           order.status === 'IN_PROGRESS' ? 'badge-warning' :
                           order.status === 'CANCELLED' ? 'badge-danger' :
                           'badge-gray'
-                        }`}>{order.status}</span>
+                        }`}>{t(`status.${order.status}`)}</span>
                       </td>
                       <td className="table-cell">
-                        <span className={`badge ${priorityColors[order.priority] || 'badge-gray'}`}>{order.priority}</span>
+                        <span className={`badge ${priorityColors[order.priority] || 'badge-gray'}`}>{t(`priority.${order.priority}`)}</span>
                       </td>
                       <td className="table-cell text-gray-600">{getAssignedName(order) || '-'}</td>
                       <td className="table-cell text-gray-600">{getOrderDate(order) ? new Date(getOrderDate(order) as string).toLocaleDateString() : '-'}</td>
@@ -272,7 +267,7 @@ export default function WorkOrders() {
       {activeAlerts.length > 0 && (
         <div className="card">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="card-title">Anomalías de sensores activas</h3>
+            <h3 className="card-title">{t('workorders.active-anomalies')}</h3>
             <span className="badge-danger">{activeAlerts.length}</span>
           </div>
           <div className="space-y-2">
@@ -283,7 +278,7 @@ export default function WorkOrders() {
                   <p className="truncate text-xs text-gray-500">{alert.asset?.name || 'Activo no informado'}{alert.sensor?.name ? ` - ${alert.sensor.name}` : ''}</p>
                 </div>
                 <button onClick={() => openFromAlert(alert)} className="btn-primary whitespace-nowrap px-3 py-1.5 text-xs">
-                  Crear OT
+                  {t('workorders.create-from-alert')}
                 </button>
               </div>
             ))}
@@ -296,7 +291,7 @@ export default function WorkOrders() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Create Work Order</h3>
+              <h3 className="text-lg font-semibold text-gray-900">{t('workorders.create')}</h3>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="h-5 w-5" />
               </button>
@@ -304,20 +299,20 @@ export default function WorkOrders() {
             {error && <div className="mb-4 rounded-lg bg-danger-50 p-3 text-sm text-danger-700">{error}</div>}
             <div className="space-y-4">
               <div>
-                <label className="label">Title *</label>
+                <label className="label">{t('workorders.title-field')} *</label>
                 <input className="input-field" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
               </div>
               <div>
-                <label className="label">Description</label>
+                <label className="label">{t('workorders.description')}</label>
                 <textarea className="input-field" rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="label">Priority</label>
+                  <label className="label">{t('workorders.priority')}</label>
                   <select className="input-field" value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
-                    <option value="LOW">Low</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HIGH">High</option>
+                    <option value="LOW">{t('priority.LOW')}</option>
+                    <option value="MEDIUM">{t('priority.MEDIUM')}</option>
+                    <option value="HIGH">{t('priority.HIGH')}</option>
                   </select>
                 </div>
                 <div>
@@ -330,17 +325,17 @@ export default function WorkOrders() {
                   </select>
                 </div>
                 <div>
-                  <label className="label">Assigned To</label>
+                  <label className="label">{t('workorders.assigned-to')}</label>
                   <input className="input-field" value={form.assignedTo} onChange={e => setForm(f => ({ ...f, assignedTo: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="label">Due Date</label>
+                  <label className="label">{t('workorders.due-date')}</label>
                   <input type="date" className="input-field" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
                 </div>
               </div>
               <div className="flex justify-end gap-3 pt-4">
-                <button onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>
-                <button onClick={handleCreate} className="btn-primary">Create</button>
+                <button onClick={() => setShowModal(false)} className="btn-secondary">{t('common.cancel')}</button>
+                <button onClick={handleCreate} className="btn-primary">{t('common.create')}</button>
               </div>
             </div>
           </div>
