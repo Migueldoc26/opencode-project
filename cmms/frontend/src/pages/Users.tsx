@@ -155,7 +155,7 @@ export default function UsersPage() {
             </thead>
             <tbody className="divide-y">
               {loading ? (
-                <tr><td colSpan={7} className="p-8 text-center"><div className="flex items-center justify-center"><LoadingIndicator size={20} /></div></td></tr>
+                <tr><td colSpan={7} className="p-8 text-center"><div className="flex items-center justify-center"><LoadingIndicator prominent label="Cargando usuarios..." state="searching" /></div></td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} className="p-8 text-center text-sm text-gray-500">No se encontraron usuarios</td></tr>
               ) : filtered.map(u => (

@@ -116,7 +116,7 @@ export default function ActivityLog() {
       <div className="space-y-3">
         {loading ? (
           <div className="flex justify-center py-12">
-            <LoadingIndicator size={64} />
+            <LoadingIndicator prominent label="Cargando actividades..." state="searching" />
           </div>
         ) : logs.items.length === 0 ? (
           <div className="card flex flex-col items-center justify-center py-12 text-gray-400">

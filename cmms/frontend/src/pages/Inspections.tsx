@@ -166,7 +166,7 @@ export default function Inspections() {
       <div className="grid gap-4">
         {loading ? (
           <div className="flex justify-center py-8">
-            <LoadingIndicator size={64} />
+            <LoadingIndicator prominent label="Cargando inspecciones..." state="searching" />
           </div>
         ) : inspections.length === 0 ? (
           <div className="card flex flex-col items-center justify-center py-12 text-gray-400">

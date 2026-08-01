@@ -92,7 +92,7 @@ export default function AssetDetail() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <LoadingIndicator size={64} />
+        <LoadingIndicator prominent label="Cargando activo..." state="searching" />
       </div>
     )
   }

@@ -20,6 +20,7 @@ import ActivityLog from './pages/ActivityLog'
 import MqttInspector from './pages/MqttInspector'
 import { type ReactNode } from 'react'
 import LoadingIndicator from './components/common/LoadingIndicator'
+import RouteTransitionOverlay from './components/common/RouteTransitionOverlay'
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
@@ -71,6 +72,7 @@ export default function App() {
     <BrowserRouter>
       <TranslationProvider>
         <AuthProvider>
+          <RouteTransitionOverlay />
           <AppRoutes />
         </AuthProvider>
       </TranslationProvider>

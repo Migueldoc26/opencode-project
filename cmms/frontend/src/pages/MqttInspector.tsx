@@ -296,7 +296,7 @@ export default function MqttInspector() {
             )}
             <div className="space-y-2">
               {sensorsLoading ? (
-                <div className="flex justify-center py-6"><LoadingIndicator size={20} /></div>
+                <div className="flex justify-center py-6"><LoadingIndicator label="Cargando sensores..." state="searching" /></div>
               ) : sensors.length === 0 ? (
                 <div className="flex justify-center py-6 text-sm text-gray-400">No hay sensores</div>
               ) : (

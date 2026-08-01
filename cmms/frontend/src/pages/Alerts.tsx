@@ -165,7 +165,7 @@ export default function Alerts() {
         <div className="space-y-3">
           {loading ? (
             <div className="flex justify-center py-8">
-              <LoadingIndicator size={64} />
+              <LoadingIndicator prominent label="Cargando alertas..." state="searching" />
             </div>
           ) : safeActive.length === 0 ? (
             <div className="card flex flex-col items-center justify-center py-12 text-gray-400">
@@ -233,7 +233,7 @@ export default function Alerts() {
         <div className="space-y-3">
           {loading ? (
             <div className="flex justify-center py-8">
-              <LoadingIndicator size={64} />
+              <LoadingIndicator prominent label="Cargando historial..." state="searching" />
             </div>
           ) : filteredHistory.length === 0 ? (
             <div className="card flex flex-col items-center justify-center py-12 text-gray-400">

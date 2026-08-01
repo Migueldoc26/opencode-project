@@ -47,7 +47,7 @@ export default function WorkOrderDetail() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <LoadingIndicator size={64} />
+        <LoadingIndicator prominent label="Cargando orden de trabajo..." state="searching" />
       </div>
     )
   }

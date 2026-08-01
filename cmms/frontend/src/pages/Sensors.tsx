@@ -292,7 +292,7 @@ export default function Sensors() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {loading ? (
           <div className="col-span-full flex justify-center py-12">
-            <LoadingIndicator size={64} />
+            <LoadingIndicator prominent label="Cargando sensores..." state="searching" />
           </div>
         ) : filteredSensors.length === 0 ? (
           <div className="col-span-full py-12 text-center text-sm text-gray-500">{t('sensors.none')}</div>

@@ -173,7 +173,7 @@ export default function Assets() {
             </thead>
             <tbody className="divide-y">
               {loading ? (
-                <tr><td colSpan={6} className="p-8 text-center"><div className="flex items-center justify-center"><LoadingIndicator size={20} /></div></td></tr>
+                <tr><td colSpan={6} className="p-8 text-center"><div className="flex items-center justify-center"><LoadingIndicator prominent label="Cargando activos..." state="searching" /></div></td></tr>
               ) : assets.length === 0 ? (
                 <tr><td colSpan={6} className="p-8 text-center text-sm text-gray-500">No assets found</td></tr>
               ) : (
