@@ -14,6 +14,7 @@ import {
   Maximize2, Minimize2, Undo2, Redo2,
   Layers, Plus, Search, Settings, Radio, Droplets, Zap, Wind, Waves, ArrowUp, ArrowDown,
 } from 'lucide-react'
+import { ThinkingOrb } from 'thinking-orbs'
 import { digitalTwinService, assetService, sensorService } from '../services/api'
 import ErrorBoundary from '../components/ErrorBoundary'
 
@@ -149,7 +150,7 @@ function LoadingSpinner() {
   return (
     <Html center>
       <div className="flex flex-col items-center gap-2">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+        <ThinkingOrb state="searching" size={64} />
         <p className="text-sm text-gray-500">{progress.toFixed(0)}% loaded</p>
       </div>
     </Html>
@@ -1362,7 +1363,7 @@ export default function DigitalTwin() {
           className={`toolbar-btn ${saveStatus === 'saved' ? 'bg-success-50 text-success-700' : saveStatus === 'error' ? 'bg-danger-50 text-danger-700' : 'text-success-600 hover:bg-success-50'}`}
           title="Guardar (Ctrl+S)">
           {saveStatus === 'saving' ? (
-            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+            <ThinkingOrb state="working" size={20} />
           ) : <Save className="h-4 w-4" />}
           <span className="ml-1 text-[10px]">{
             saveStatus === 'saving' ? 'Guardando...' :

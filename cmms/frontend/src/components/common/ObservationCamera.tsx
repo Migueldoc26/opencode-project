@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Camera, CameraOff, Upload, X } from 'lucide-react'
+import { ThinkingOrb } from 'thinking-orbs'
 
 interface ObservationCameraProps {
   onCapture?: (blob: Blob) => void
@@ -133,7 +134,7 @@ export default function ObservationCamera({ onCapture, onUpload }: ObservationCa
               className="btn-success flex items-center gap-2"
             >
               <Upload className="h-4 w-4" />
-              {uploading ? 'Uploading...' : 'Upload'}
+              {uploading ? <ThinkingOrb state="working" size={20} /> : 'Upload'}
             </button>
             <button onClick={discard} className="btn-secondary flex items-center gap-2">
               <X className="h-4 w-4" />
