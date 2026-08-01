@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { alertService, assetService, workOrderService } from '../services/api'
 import { useTranslation } from '../context/TranslationContext'
+import LoadingIndicator from '../components/common/LoadingIndicator'
 
 interface WorkOrder {
   id: string
@@ -233,7 +234,7 @@ export default function WorkOrders() {
               </thead>
               <tbody className="divide-y">
                 {loading ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-sm text-gray-500">{t('common.loading')}</td></tr>
+                  <tr><td colSpan={7} className="p-8 text-center"><div className="flex items-center justify-center"><LoadingIndicator size={20} /></div></td></tr>
                 ) : orders.length === 0 ? (
                   <tr><td colSpan={7} className="p-8 text-center text-sm text-gray-500">{t('workorders.none')}</td></tr>
                 ) : (

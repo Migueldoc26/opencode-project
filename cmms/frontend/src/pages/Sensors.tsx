@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import api, { sensorService, assetService } from '../services/api'
 import { useTranslation } from '../context/TranslationContext'
+import LoadingIndicator from '../components/common/LoadingIndicator'
 
 interface SensorType {
   value: string
@@ -291,7 +292,7 @@ export default function Sensors() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {loading ? (
           <div className="col-span-full flex justify-center py-12">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+            <LoadingIndicator size={64} />
           </div>
         ) : filteredSensors.length === 0 ? (
           <div className="col-span-full py-12 text-center text-sm text-gray-500">{t('sensors.none')}</div>

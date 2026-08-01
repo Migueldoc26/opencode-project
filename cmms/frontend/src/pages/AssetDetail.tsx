@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { assetService, digitalTwinService, sensorService } from '../services/api'
+import LoadingIndicator from '../components/common/LoadingIndicator'
 
 const readingHistory = [
   { time: '00:00', temperature: 72, pressure: 4.1, vibration: 1.2 },
@@ -91,7 +92,7 @@ export default function AssetDetail() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+        <LoadingIndicator size={64} />
       </div>
     )
   }

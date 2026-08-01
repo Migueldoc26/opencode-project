@@ -19,13 +19,14 @@ import Users from './pages/Users'
 import ActivityLog from './pages/ActivityLog'
 import MqttInspector from './pages/MqttInspector'
 import { type ReactNode } from 'react'
+import LoadingIndicator from './components/common/LoadingIndicator'
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+        <LoadingIndicator label="Cargando..." />
       </div>
     )
   }

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Wifi, WifiOff, Send, Trash2, Radio, Activity, Thermometer, Droplets, Wind, Ruler, CheckCircle2, XCircle } from 'lucide-react'
 import { useWebSocket } from '../context/WebSocketContext'
 import api, { sensorService } from '../services/api'
+import LoadingIndicator from '../components/common/LoadingIndicator'
 
 interface MqttMessage {
   id: number
@@ -295,7 +296,7 @@ export default function MqttInspector() {
             )}
             <div className="space-y-2">
               {sensorsLoading ? (
-                <div className="flex justify-center py-6 text-sm text-gray-400">Cargando sensores...</div>
+                <div className="flex justify-center py-6"><LoadingIndicator size={20} /></div>
               ) : sensors.length === 0 ? (
                 <div className="flex justify-center py-6 text-sm text-gray-400">No hay sensores</div>
               ) : (

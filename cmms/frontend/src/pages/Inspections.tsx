@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { assetService, inspectionService } from '../services/api'
 import ObservationCamera from '../components/common/ObservationCamera'
+import LoadingIndicator from '../components/common/LoadingIndicator'
 import { useTranslation } from '../context/TranslationContext'
 
 interface Inspection {
@@ -165,7 +166,7 @@ export default function Inspections() {
       <div className="grid gap-4">
         {loading ? (
           <div className="flex justify-center py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+            <LoadingIndicator size={64} />
           </div>
         ) : inspections.length === 0 ? (
           <div className="card flex flex-col items-center justify-center py-12 text-gray-400">

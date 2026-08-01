@@ -5,6 +5,7 @@ import {
   AlertTriangle, MessageSquare, X,
 } from 'lucide-react'
 import { workOrderService } from '../services/api'
+import LoadingIndicator from '../components/common/LoadingIndicator'
 
 interface Activity {
   id: string
@@ -46,7 +47,7 @@ export default function WorkOrderDetail() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+        <LoadingIndicator size={64} />
       </div>
     )
   }

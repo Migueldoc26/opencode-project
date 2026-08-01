@@ -5,6 +5,7 @@ import {
   Activity, RefreshCw,
 } from 'lucide-react'
 import { auditLogService } from '../services/api'
+import LoadingIndicator from '../components/common/LoadingIndicator'
 
 const actionIcons: Record<string, typeof Activity> = {
   LOGIN: LogIn,
@@ -115,7 +116,7 @@ export default function ActivityLog() {
       <div className="space-y-3">
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+            <LoadingIndicator size={64} />
           </div>
         ) : logs.items.length === 0 ? (
           <div className="card flex flex-col items-center justify-center py-12 text-gray-400">

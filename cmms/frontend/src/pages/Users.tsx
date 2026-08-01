@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, Edit, Trash2, User, Shield, ShieldAlert, Users, Key, X, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import { userService } from '../services/api'
+import LoadingIndicator from '../components/common/LoadingIndicator'
 
 interface UserData {
   id: string
@@ -154,7 +155,7 @@ export default function UsersPage() {
             </thead>
             <tbody className="divide-y">
               {loading ? (
-                <tr><td colSpan={7} className="p-8 text-center text-sm text-gray-500">Cargando...</td></tr>
+                <tr><td colSpan={7} className="p-8 text-center"><div className="flex items-center justify-center"><LoadingIndicator size={20} /></div></td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} className="p-8 text-center text-sm text-gray-500">No se encontraron usuarios</td></tr>
               ) : filtered.map(u => (

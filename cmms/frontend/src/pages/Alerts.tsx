@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { alertService } from '../services/api'
 import { useWebSocket } from '../context/WebSocketContext'
+import LoadingIndicator from '../components/common/LoadingIndicator'
 import ErrorBoundary from '../components/ErrorBoundary'
 
 interface Alert {
@@ -164,7 +165,7 @@ export default function Alerts() {
         <div className="space-y-3">
           {loading ? (
             <div className="flex justify-center py-8">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+              <LoadingIndicator size={64} />
             </div>
           ) : safeActive.length === 0 ? (
             <div className="card flex flex-col items-center justify-center py-12 text-gray-400">
@@ -232,7 +233,7 @@ export default function Alerts() {
         <div className="space-y-3">
           {loading ? (
             <div className="flex justify-center py-8">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+              <LoadingIndicator size={64} />
             </div>
           ) : filteredHistory.length === 0 ? (
             <div className="card flex flex-col items-center justify-center py-12 text-gray-400">
